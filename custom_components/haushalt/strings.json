@@ -17,7 +17,11 @@
         "data": {
           "zeit_morgen": "Frist \"Morgen\" endet um",
           "zeit_abend": "Frist \"Abend\" endet um",
-          "vorschau_tage": "Aufgaben so viele Tage im Voraus anzeigen"
+          "vorschau_tage": "Aufgaben so viele Tage im Voraus anzeigen",
+          "wetter": "Wetter fürs Display"
+        },
+        "data_description": {
+          "wetter": "Optional. Daraus berechnet die Integration Vormittag und Nachmittag für heute und die nächsten 2 Tage (Sensor Display-Wetter)."
         }
       }
     }
@@ -134,6 +138,9 @@
       },
       "liste": {
         "name": "Aufgaben"
+      },
+      "wetter": {
+        "name": "Display-Wetter"
       },
       "saugstart": {
         "name": "Saugstart"

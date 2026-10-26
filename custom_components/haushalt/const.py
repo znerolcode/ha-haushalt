@@ -36,6 +36,7 @@ DEFAULT_MINDESTABSTAND = 3
 CONF_ZEIT_MORGEN = "zeit_morgen"
 CONF_ZEIT_ABEND = "zeit_abend"
 CONF_VORSCHAU = "vorschau_tage"
+CONF_WETTER = "wetter"
 
 DEFAULT_ZEIT_MORGEN = "09:00:00"
 DEFAULT_ZEIT_ABEND = "23:59:00"
@@ -53,3 +54,6 @@ NACHHOLEN_MAX_MIN = 15
 EVENT_ERLEDIGT = "haushalt_erledigt"
 
 SIGNAL_UPDATE = "haushalt_update_{}"
+
+# So oft wird die Wettervorhersage neu geholt
+WETTER_INTERVALL_MIN = 30

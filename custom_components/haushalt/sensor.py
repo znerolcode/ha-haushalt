@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import HaushaltConfigEntry
 from .entity import AufgabeEntity, HaushaltEntity
@@ -21,6 +23,8 @@ async def async_setup_entry(
 ) -> None:
     manager = entry.runtime_data
     async_add_entities([ListeSensor(manager, entry.entry_id)])
+    if manager.wetter is not None:
+        async_add_entities([WetterSensor(manager, entry.entry_id)])
     for aufgabe_id, aufgabe in manager.aufgaben.items():
         sensoren: list[SensorEntity] = [AufgabeSensor(manager, aufgabe_id)]
         if aufgabe.staubsauger:
@@ -110,4 +114,48 @@ class ListeSensor(HaushaltEntity, SensorEntity):
                 for s in sichtbar
             ],
             "anzeige": self.manager.anzeige,
+            "saugstart": self._naechster_saugstart(),
+        }
+
+    def _naechster_saugstart(self) -> str:
+        """Uhrzeit des nächsten geplanten Saugstarts, z.B. '17:05', sonst leer."""
+        starts = [
+            zeit
+            for aufgabe_id in self.manager.aufgaben
+            if (zeit := self.manager.saugstart(aufgabe_id)) is not None
+        ]
+        if not starts:
+            return ""
+        return dt_util.as_local(min(starts)).strftime("%H:%M")
+
+
+class WetterSensor(HaushaltEntity, SensorEntity):
+    """Wetter fürs Display: heute und die nächsten 2 Tage, je Vormittag und Nachmittag."""
+
+    _attr_translation_key = "wetter"
+    _attr_icon = "mdi:weather-partly-cloudy"
+
+    def __init__(self, manager, entry_id: str) -> None:
+        super().__init__(manager)
+        self._attr_unique_id = f"{entry_id}_wetter"
+
+    @property
+    def native_value(self) -> str | None:
+        aktuell = self.manager.wetter.aktuell
+        return aktuell.zustand if aktuell and aktuell.zustand else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        wetter = self.manager.wetter
+        return {
+            "wetter_entitaet": wetter.entity_id,
+            "tage": [
+                {
+                    "tag": name,
+                    "vormittag": asdict(vm) if vm else None,
+                    "nachmittag": asdict(nm) if nm else None,
+                }
+                for name, vm, nm in wetter.tage
+            ],
+            "anzeige": wetter.anzeige,
         }
