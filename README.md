@@ -24,16 +24,23 @@ Unter **Einstellungen → Geräte & Dienste → Haushalt** auf **Aufgabe hinzuf�
 
 Termin-Aufgaben: Das erste Datum bestimmt den Wochentag, „alle X Wochen“ die Wiederholung. Unregelmässige Termine (z.B. aus dem Abfuhrkalender) trägst du unter „Weitere einzelne Termine“ ein: `05.11.2026, 19.11.2026`.
 
+Optional kannst du einer Aufgabe einen **Staubsauger** zuordnen (z.B. „Zum Staubsaugen vorbereiten“ mit dem Roborock). Beim Abhaken wählst du dann, ob er sofort oder in 5, 20 oder 60 Minuten startet. Er saugt die ganze Wohnung (`vacuum.start`).
+
 Unter **Konfigurieren** stellst du ein, wann die Fristen „Morgen“ (Standard 09:00) und „Abend“ (23:59) enden und wie viele Tage im Voraus Aufgaben erscheinen (Standard 7).
 
 ## Entitäten
 
 - Pro Aufgabe ein Sensor **Fälligkeit** (Zustand z.B. „in 4 Tagen“, Attribute `faellig_am`, `tage`, `gruppe`, `aufgabe_id`) und ein Knopf **Erledigt**.
-- `sensor.aufgaben`: Anzahl sichtbarer Aufgaben. Attribut `aufgaben` als Liste, Attribut `anzeige` als Text für das Display, eine Zeile pro Aufgabe: `aufgabe_id|gruppe|name|text|ueberfaellig`.
+- Aufgaben mit Staubsauger haben zusätzlich: Knöpfe **Erledigt, sofort saugen** und **Erledigt, saugen in 5/20/60 Min**, einen Sensor **Saugstart** (Zeitpunkt des geplanten Starts, leer wenn nichts geplant) und einen Knopf **Saugstart abbrechen**. Ein geplanter Start übersteht einen Neustart von HA. War HA länger als 15 Minuten über den geplanten Zeitpunkt hinaus aus, entfällt der Start.
+- `sensor.aufgaben`: Anzahl sichtbarer Aufgaben. Attribut `aufgaben` als Liste, Attribut `anzeige` als Text für das Display, eine Zeile pro Aufgabe: `aufgabe_id|gruppe|name|text|ueberfaellig|startzeit_auswahl` (die letzten beiden 0 oder 1; `startzeit_auswahl` = 1, wenn die Aufgabe einen Staubsauger hat).
 
 ## Dienst
 
-`haushalt.erledigt` mit `aufgabe_id` hakt eine Aufgabe ab. Bei Termin-Aufgaben wird der nächste offene Termin abgehakt.
+`haushalt.erledigt` mit `aufgabe_id` hakt eine Aufgabe ab. Bei Termin-Aufgaben wird der nächste offene Termin abgehakt. Optional `start_in_min` (0, 5, 20 oder 60) für Aufgaben mit Staubsauger; ohne Angabe startet er sofort.
+
+## Ereignis
+
+Nach jedem Abhaken feuert `haushalt_erledigt` mit `aufgabe_id`, `name` und `start_in_min` (bei Aufgaben ohne Staubsauger leer). Damit lassen sich eigene Automationen auslösen.
 
 ## Entwicklung
 

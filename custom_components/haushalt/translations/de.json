@@ -50,7 +50,11 @@
           "title": "Intervall",
           "data": {
             "tage": "Alle wie viele Tage",
-            "zuletzt_erledigt": "Zuletzt erledigt am"
+            "zuletzt_erledigt": "Zuletzt erledigt am",
+            "staubsauger": "Staubsauger"
+          },
+          "data_description": {
+            "staubsauger": "Optional. Beim Abhaken wählst du, ob er sofort oder in 5, 20 oder 60 Minuten die ganze Wohnung saugt."
           }
         },
         "termin": {
@@ -59,11 +63,13 @@
             "frist": "Frist",
             "startdatum": "Erster Termin",
             "alle_wochen": "Wiederholen alle X Wochen (0 = nicht wiederholen)",
-            "weitere_daten": "Weitere einzelne Termine"
+            "weitere_daten": "Weitere einzelne Termine",
+            "staubsauger": "Staubsauger"
           },
           "data_description": {
             "startdatum": "Der Wochentag dieses Datums bestimmt die Wiederholung.",
-            "weitere_daten": "Optional, z.B. aus dem Abfuhrkalender: 05.11.2026, 19.11.2026"
+            "weitere_daten": "Optional, z.B. aus dem Abfuhrkalender: 05.11.2026, 19.11.2026",
+            "staubsauger": "Optional. Beim Abhaken wählst du, ob er sofort oder in 5, 20 oder 60 Minuten die ganze Wohnung saugt."
           }
         }
       },
@@ -92,11 +98,29 @@
   },
   "entity": {
     "sensor": {
-      "faelligkeit": { "name": "Fälligkeit" },
-      "liste": { "name": "Aufgaben" }
+      "faelligkeit": {
+        "name": "Fälligkeit"
+      },
+      "liste": {
+        "name": "Aufgaben"
+      },
+      "saugstart": {
+        "name": "Saugstart"
+      }
     },
     "button": {
-      "erledigt": { "name": "Erledigt" }
+      "erledigt": {
+        "name": "Erledigt"
+      },
+      "erledigt_sofort": {
+        "name": "Erledigt, sofort saugen"
+      },
+      "erledigt_start_in": {
+        "name": "Erledigt, saugen in {minuten} Min"
+      },
+      "saugstart_abbrechen": {
+        "name": "Saugstart abbrechen"
+      }
     }
   },
   "services": {
@@ -107,6 +131,10 @@
         "aufgabe_id": {
           "name": "Aufgaben-ID",
           "description": "Die ID der Aufgabe, steht im Attribut aufgabe_id des Fälligkeits-Sensors."
+        },
+        "start_in_min": {
+          "name": "Saugstart in Minuten",
+          "description": "Nur für Aufgaben mit Staubsauger: 0, 5, 20 oder 60. Ohne Angabe startet er sofort."
         }
       }
     }

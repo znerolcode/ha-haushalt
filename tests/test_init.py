@@ -1,11 +1,17 @@
 """Tests der Integration in Home Assistant."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from freezegun.api import FrozenDateTimeFactory
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_capture_events,
+    async_fire_time_changed,
+    async_mock_service,
+)
+import voluptuous as vol
 
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.core import HomeAssistant
@@ -174,3 +180,108 @@ async def test_optionen(hass, entry):
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert hass.states.get("sensor.aufgaben").state == "1"
+
+
+def knopf_id(hass, sub, suffix):
+    return er.async_get(hass).async_get_entity_id(
+        "button", DOMAIN, f"{sub.subentry_id}_{suffix}"
+    )
+
+
+async def staubsaugen_anlegen(hass, entry):
+    await aufgabe_anlegen(
+        hass, entry, "Zum Staubsaugen vorbereiten", "intervall",
+        {"tage": 3, "zuletzt_erledigt": "2026-10-23", "staubsauger": "vacuum.robi"},
+    )
+    _, sub = sensor_id(hass, entry, "Zum Staubsaugen vorbereiten")
+    saugstart = er.async_get(hass).async_get_entity_id(
+        "sensor", DOMAIN, f"{sub.subentry_id}_saugstart"
+    )
+    return sub, saugstart
+
+
+async def zeit_vor(hass, freezer, minuten):
+    freezer.tick(timedelta(minutes=minuten))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+
+async def test_saugen_verzoegert(hass, entry, freezer: FrozenDateTimeFactory):
+    starts = async_mock_service(hass, "vacuum", "start")
+    events = async_capture_events(hass, "haushalt_erledigt")
+    sub, saugstart = await staubsaugen_anlegen(hass, entry)
+
+    zeile = hass.states.get("sensor.aufgaben").attributes["anzeige"]
+    assert zeile == f"{sub.subentry_id}|Heute|Zum Staubsaugen vorbereiten|heute|0|1"
+    assert hass.states.get(saugstart).state == "unknown"
+
+    await hass.services.async_call(
+        "button", "press", {"entity_id": knopf_id(hass, sub, "erledigt_20")}, blocking=True
+    )
+    assert events[0].data == {
+        "aufgabe_id": sub.subentry_id,
+        "name": "Zum Staubsaugen vorbereiten",
+        "start_in_min": 20,
+    }
+    assert hass.states.get(saugstart).state == "2026-10-26T11:20:00+00:00"
+
+    await zeit_vor(hass, freezer, 19)
+    assert not starts
+    await zeit_vor(hass, freezer, 2)
+    assert len(starts) == 1
+    assert starts[0].data == {"entity_id": "vacuum.robi"}
+    assert hass.states.get(saugstart).state == "unknown"
+
+
+async def test_saugen_sofort_und_abbrechen(hass, entry, freezer: FrozenDateTimeFactory):
+    starts = async_mock_service(hass, "vacuum", "start")
+    sub, saugstart = await staubsaugen_anlegen(hass, entry)
+
+    # Ohne Angabe startet er sofort
+    await hass.services.async_call(
+        DOMAIN, "erledigt", {"aufgabe_id": sub.subentry_id}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert len(starts) == 1
+
+    await hass.services.async_call(
+        DOMAIN, "erledigt", {"aufgabe_id": sub.subentry_id, "start_in_min": "60"},
+        blocking=True,
+    )
+    assert hass.states.get(saugstart).state != "unknown"
+    await hass.services.async_call(
+        "button", "press",
+        {"entity_id": knopf_id(hass, sub, "saugstart_abbrechen")}, blocking=True,
+    )
+    assert hass.states.get(saugstart).state == "unknown"
+    await zeit_vor(hass, freezer, 61)
+    assert len(starts) == 1
+
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN, "erledigt", {"aufgabe_id": sub.subentry_id, "start_in_min": 30},
+            blocking=True,
+        )
+
+
+async def test_saugstart_nach_neustart(hass, entry, freezer: FrozenDateTimeFactory):
+    starts = async_mock_service(hass, "vacuum", "start")
+    sub, saugstart = await staubsaugen_anlegen(hass, entry)
+    await hass.services.async_call(
+        DOMAIN, "erledigt", {"aufgabe_id": sub.subentry_id, "start_in_min": 5},
+        blocking=True,
+    )
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(saugstart).state == "2026-10-26T11:05:00+00:00"
+    await zeit_vor(hass, freezer, 6)
+    assert len(starts) == 1
+
+
+async def test_ohne_staubsauger_keine_auswahl(hass, entry):
+    await aufgabe_anlegen(
+        hass, entry, "Bad putzen", "intervall", {"tage": 7, "zuletzt_erledigt": "2026-10-24"}
+    )
+    _, sub = sensor_id(hass, entry, "Bad putzen")
+    assert knopf_id(hass, sub, "erledigt_5") is None
+    assert hass.states.get(knopf_id(hass, sub, "erledigt")).name.endswith("Erledigt")

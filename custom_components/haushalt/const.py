@@ -24,6 +24,7 @@ CONF_FRIST = "frist"
 CONF_STARTDATUM = "startdatum"
 CONF_ALLE_WOCHEN = "alle_wochen"
 CONF_DATEN = "weitere_daten"
+CONF_STAUBSAUGER = "staubsauger"
 
 # Optionen der Integration
 CONF_ZEIT_MORGEN = "zeit_morgen"
@@ -36,5 +37,13 @@ DEFAULT_VORSCHAU = 7
 
 SERVICE_ERLEDIGT = "erledigt"
 ATTR_AUFGABE_ID = "aufgabe_id"
+ATTR_START_IN_MIN = "start_in_min"
+
+# Startzeit-Auswahl für Aufgaben mit Staubsauger, in Minuten
+START_OPTIONEN = [0, 5, 20, 60]
+# Ein verpasster Saugstart (z.B. HA war aus) wird nur so lange nachgeholt
+NACHHOLEN_MAX_MIN = 15
+
+EVENT_ERLEDIGT = "haushalt_erledigt"
 
 SIGNAL_UPDATE = "haushalt_update_{}"

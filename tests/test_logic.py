@@ -105,13 +105,16 @@ def test_einmaliger_termin_vorbei():
 def test_anzeige_sortierung():
     heute = date(2026, 10, 26)
     stati = [
-        berechne_intervall(Aufgabe("b", "Bettwäsche", "intervall", tage=14), date(2026, 10, 16), heute, 7),
+        berechne_intervall(
+            Aufgabe("b", "Bettwäsche", "intervall", tage=14, staubsauger="vacuum.robi"),
+            date(2026, 10, 16), heute, 7,
+        ),
         berechne_intervall(Aufgabe("p", "Bad putzen", "intervall", tage=7), date(2026, 10, 17), heute, 7),
         berechne_termin(karton(), set(), jetzt(26), MORGEN, ABEND, 7),
     ]
     zeilen = anzeige_zeilen(stati).splitlines()
     assert zeilen == [
-        "p|Überfällig|Bad putzen|2 Tage überfällig|1",
-        "k|Morgen|Altkarton|bis morgen früh|0",
-        "b|Nächste Tage|Bettwäsche|in 4 Tagen|0",
+        "p|Überfällig|Bad putzen|2 Tage überfällig|1|0",
+        "k|Morgen|Altkarton|bis morgen früh|0|0",
+        "b|Nächste Tage|Bettwäsche|in 4 Tagen|0|1",
     ]

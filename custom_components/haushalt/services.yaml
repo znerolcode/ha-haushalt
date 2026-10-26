@@ -5,3 +5,13 @@ erledigt:
       example: "01JABCDEF..."
       selector:
         text:
+    start_in_min:
+      required: false
+      example: 20
+      selector:
+        select:
+          options:
+            - "0"
+            - "5"
+            - "20"
+            - "60"
