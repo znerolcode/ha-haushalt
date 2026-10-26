@@ -199,13 +199,9 @@ font:
     id: f_wtemp
     size: 22
     glyphsets: [GF_Latin_Core]
-  - file: "gfonts://Inter@700"
-    id: f_wlabel
-    size: 12
-    glyphsets: [GF_Latin_Core]
   - file: "gfonts://Inter@400"
     id: f_wregen
-    size: 14
+    size: 17
     glyphsets: [GF_Latin_Core]
   - file: "gfonts://Inter@700"
     id: f_qr_titel
@@ -237,6 +233,15 @@ font:
       - "\U000F059E" # weather-windy-variant
       - "\U000F0026" # alert
       - "\U000F070D" # robot-vacuum
+
+  - file:
+      type: web
+      url: https://raw.githubusercontent.com/Templarian/MaterialDesign-Webfont/v7.4.47/fonts/materialdesignicons-webfont.ttf
+    id: f_symbol_klein
+    size: 18
+    glyphs:
+      - "\U000F058C" # water
+      - "\U000F0717" # snowflake
 
 display:
   - platform: waveshare_epaper
@@ -306,7 +311,8 @@ display:
       const int LINKS_B = 470;
       it.filled_rectangle(LINKS_B, 59, 3, 480 - 59, SCHWARZ);
       it.print(20, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "AUFGABEN");
-      it.print(LINKS_B + 21, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "WETTER");
+      it.print(LINKS_B + 21, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "VORMITTAG");
+      it.print(LINKS_B + 21 + (800 - 18 - LINKS_B - 21) / 2 + 6, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "NACHMITTAG");
 
       // ---- Aufgabenliste ----
       int liste_y = 96;
@@ -469,17 +475,23 @@ display:
           it.print(WX, ty, id(f_wtag), SCHWARZ, TextAlign::TOP_LEFT, f[0].c_str());
           for (int hf = 0; hf < 2; hf++) {
             int hx = WX + hf * (WB / 2 + 6);
-            int hy = ty + 30;
-            const std::string &zustand = f[1 + hf * 3], &temp = f[2 + hf * 3], &regen = f[3 + hf * 3];
-            if (hf == 1) it.filled_rectangle(hx - 8, hy + 2, 2, 60, SCHWARZ);
-            it.print(hx, hy + 32, id(f_symbol), SCHWARZ, TextAlign::CENTER_LEFT, zustand.empty() ? "" : symbol(zustand));
-            it.print(hx + 42, hy, id(f_wlabel), SCHWARZ, TextAlign::TOP_LEFT, hf == 0 ? "VORM." : "NACHM.");
+            int hy = ty + 28;
+            const std::string &zustand = f[1 + hf * 3], &regen = f[3 + hf * 3];
+            std::string temp = f[2 + hf * 3];
+            if (hf == 1) it.filled_rectangle(hx - 8, hy, 2, 62, SCHWARZ);
+            it.print(hx, hy + 30, id(f_symbol), SCHWARZ, TextAlign::CENTER_LEFT, zustand.empty() ? "" : symbol(zustand));
+            // Echtes Minuszeichen statt Bindestrich, besser lesbar
+            if (!temp.empty() && temp[0] == '-') temp = "−" + temp.substr(1);
             if (temp.empty())
-              it.print(hx + 42, hy + 14, id(f_wtemp), SCHWARZ, TextAlign::TOP_LEFT, "–");
+              it.print(hx + 42, hy + 2, id(f_wtemp), SCHWARZ, TextAlign::TOP_LEFT, "–");
             else
-              it.printf(hx + 42, hy + 14, id(f_wtemp), SCHWARZ, TextAlign::TOP_LEFT, "%s°", temp.c_str());
-            if (!regen.empty())
-              it.printf(hx + 42, hy + 42, id(f_wregen), SCHWARZ, TextAlign::TOP_LEFT, "%s Regen", regen.c_str());
+              it.printf(hx + 42, hy + 2, id(f_wtemp), SCHWARZ, TextAlign::TOP_LEFT, "%s°", temp.c_str());
+            if (!regen.empty()) {
+              // Tropfen für Regen, Schneeflocke für Schnee
+              bool schnee = zustand == "snowy";
+              it.print(hx + 40, hy + 44, id(f_symbol_klein), SCHWARZ, TextAlign::CENTER_LEFT, schnee ? "\U000F0717" : "\U000F058C");
+              it.print(hx + 62, hy + 34, id(f_wregen), SCHWARZ, TextAlign::TOP_LEFT, regen.c_str());
+            }
           }
           if (t < 2) it.filled_rectangle(WX, ty + 118, WB, 2, SCHWARZ);
         }
