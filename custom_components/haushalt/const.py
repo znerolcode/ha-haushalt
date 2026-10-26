@@ -6,6 +6,7 @@ SUBENTRY_AUFGABE = "aufgabe"
 
 TYP_INTERVALL = "intervall"
 TYP_TERMIN = "termin"
+TYP_WOCHENTAG = "wochentag"
 
 FRIST_MORGEN = "morgen"
 FRIST_ABEND = "abend"
@@ -25,6 +26,11 @@ CONF_STARTDATUM = "startdatum"
 CONF_ALLE_WOCHEN = "alle_wochen"
 CONF_DATEN = "weitere_daten"
 CONF_STAUBSAUGER = "staubsauger"
+CONF_WOCHENTAGE = "wochentage"
+CONF_MINDESTABSTAND = "mindestabstand"
+
+WOCHENTAGE = ["mo", "di", "mi", "do", "fr", "sa", "so"]
+DEFAULT_MINDESTABSTAND = 3
 
 # Optionen der Integration
 CONF_ZEIT_MORGEN = "zeit_morgen"

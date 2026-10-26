@@ -15,6 +15,7 @@ from .const import (
     GRUPPE_UEBERFAELLIG,
     TYP_INTERVALL,
     TYP_TERMIN,
+    TYP_WOCHENTAG,
 )
 
 GRUPPEN_REIHENFOLGE = [GRUPPE_UEBERFAELLIG, GRUPPE_HEUTE, GRUPPE_MORGEN, GRUPPE_NAECHSTE]
@@ -36,6 +37,9 @@ class Aufgabe:
     daten: list[date] = field(default_factory=list)
     # Staubsauger, der nach dem Abhaken startet (Entity-ID)
     staubsauger: str | None = None
+    # Wochentag (0 = Montag); startdatum legt bei alle_wochen > 1 die Woche fest
+    wochentage: list[int] = field(default_factory=list)
+    mindestabstand: int = 3
 
 
 @dataclass
@@ -118,6 +122,56 @@ def berechne_intervall(
     aufgabe: Aufgabe, zuletzt: date, heute: date, vorschau_tage: int
 ) -> Status:
     datum = zuletzt + timedelta(days=aufgabe.tage)
+    tage = (datum - heute).days
+    return Status(
+        aufgabe=aufgabe,
+        datum=datum,
+        tage=tage,
+        gruppe=gruppe_fuer(tage),
+        text=text_intervall(tage),
+        sichtbar=tage <= vorschau_tage,
+    )
+
+
+def ist_plantag(aufgabe: Aufgabe, datum: date) -> bool:
+    """Liegt das Datum auf einem gewählten Wochentag in einer passenden Woche?"""
+    if datum.weekday() not in aufgabe.wochentage:
+        return False
+    if aufgabe.alle_wochen <= 1 or aufgabe.startdatum is None:
+        return True
+    start_montag = aufgabe.startdatum - timedelta(days=aufgabe.startdatum.weekday())
+    wochen = (datum - start_montag).days // 7
+    return wochen % aufgabe.alle_wochen == 0
+
+
+def faellig_wochentag(aufgabe: Aufgabe, zuletzt: date | None, erstellt: date) -> date | None:
+    """Erster Plantag, der mindestens `mindestabstand` Tage nach dem Erledigen liegt.
+
+    Noch nie erledigt: erster Plantag ab dem Erstellen der Aufgabe.
+    """
+    if zuletzt is None:
+        ab = erstellt
+    else:
+        ab = zuletzt + timedelta(days=max(aufgabe.mindestabstand, 1))
+    if aufgabe.startdatum is not None and aufgabe.startdatum > ab:
+        ab = aufgabe.startdatum
+    for i in range(7 * max(aufgabe.alle_wochen, 1) + 7):
+        datum = ab + timedelta(days=i)
+        if ist_plantag(aufgabe, datum):
+            return datum
+    return None
+
+
+def berechne_wochentag(
+    aufgabe: Aufgabe,
+    zuletzt: date | None,
+    erstellt: date,
+    heute: date,
+    vorschau_tage: int,
+) -> Status:
+    datum = faellig_wochentag(aufgabe, zuletzt, erstellt)
+    if datum is None:
+        return Status(aufgabe, None, None, None, "kein Wochentag", False)
     tage = (datum - heute).days
     return Status(
         aufgabe=aufgabe,
@@ -214,6 +268,7 @@ __all__ = [
     "Status",
     "TYP_INTERVALL",
     "TYP_TERMIN",
+    "TYP_WOCHENTAG",
     "FRIST_ABEND",
     "FRIST_MORGEN",
 ]

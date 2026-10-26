@@ -11,6 +11,8 @@ from custom_components.haushalt.logic import (
     anzeige_zeilen,
     berechne_intervall,
     berechne_termin,
+    berechne_wochentag,
+    faellig_wochentag,
     parse_daten,
     termine_ab,
 )
@@ -118,3 +120,68 @@ def test_anzeige_sortierung():
         "k|Morgen|Altkarton|bis morgen früh|0|0",
         "b|Nächste Tage|Bettwäsche|in 4 Tagen|0|1",
     ]
+
+
+# --- Wochentag ---
+
+
+SA = 5
+
+
+def bad(**kw):
+    return Aufgabe(id="w", name="Bad putzen", typ="wochentag", wochentage=[SA],
+                   alle_wochen=1, mindestabstand=3, **kw)
+
+
+def test_wochentag_noch_nie_erledigt():
+    # erstellt Montag 26.10. -> Samstag 31.10.
+    assert faellig_wochentag(bad(), None, date(2026, 10, 26)) == date(2026, 10, 31)
+
+
+def test_wochentag_am_donnerstag_erledigt_ueberspringt_samstag():
+    # Do 29.10. erledigt, Sa 31.10. nur 2 Tage später -> Sa 7.11.
+    assert faellig_wochentag(bad(), date(2026, 10, 29), date(2026, 10, 1)) == date(2026, 11, 7)
+
+
+def test_wochentag_am_mittwoch_erledigt_samstag_bleibt():
+    # Mi 28.10. erledigt, Sa 31.10. ist 3 Tage später -> bleibt
+    assert faellig_wochentag(bad(), date(2026, 10, 28), date(2026, 10, 1)) == date(2026, 10, 31)
+
+
+def test_wochentag_am_samstag_erledigt():
+    assert faellig_wochentag(bad(), date(2026, 10, 31), date(2026, 10, 1)) == date(2026, 11, 7)
+
+
+def test_wochentag_mindestabstand_null_nicht_gleicher_tag():
+    a = bad()
+    a.mindestabstand = 0
+    assert faellig_wochentag(a, date(2026, 10, 31), date(2026, 10, 1)) == date(2026, 11, 7)
+
+
+def test_wochentag_ueberfaellig_bis_erledigt():
+    # zuletzt Sa 17.10., fällig Sa 24.10., heute Mo 26.10. -> 2 Tage überfällig
+    s = berechne_wochentag(bad(), date(2026, 10, 17), date(2026, 10, 1), date(2026, 10, 26), 7)
+    assert (s.text, s.gruppe) == ("2 Tage überfällig", "Überfällig")
+
+
+def test_wochentag_verpasst_dann_montag_erledigt():
+    # Mo 26.10. erledigt -> Sa 31.10. (5 Tage später)
+    assert faellig_wochentag(bad(), date(2026, 10, 26), date(2026, 10, 1)) == date(2026, 10, 31)
+
+
+def test_wochentag_zweimal_pro_woche():
+    a = bad()
+    a.wochentage = [2, SA]  # Mi und Sa
+    # Mi 28.10. erledigt: Sa 31.10. ist 3 Tage später -> Sa
+    assert faellig_wochentag(a, date(2026, 10, 28), date(2026, 10, 1)) == date(2026, 10, 31)
+    # Do 29.10. erledigt: Sa zu früh, nächster Plantag Mi 4.11.
+    assert faellig_wochentag(a, date(2026, 10, 29), date(2026, 10, 1)) == date(2026, 11, 4)
+
+
+def test_wochentag_alle_zwei_wochen():
+    # Woche von Sa 31.10. zählt, also Sa 14.11., nicht Sa 7.11.
+    a = bad(startdatum=date(2026, 10, 31))
+    a.alle_wochen = 2
+    assert faellig_wochentag(a, date(2026, 10, 31), date(2026, 10, 1)) == date(2026, 11, 14)
+    # Startdatum in der Zukunft: frühestens ab dann
+    assert faellig_wochentag(a, None, date(2026, 10, 26)) == date(2026, 10, 31)

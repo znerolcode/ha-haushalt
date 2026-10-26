@@ -30,7 +30,9 @@ from .const import (
     CONF_STAUBSAUGER,
     CONF_TAGE,
     CONF_TYP,
+    CONF_MINDESTABSTAND,
     CONF_VORSCHAU,
+    CONF_WOCHENTAGE,
     CONF_ZEIT_ABEND,
     CONF_ZEIT_MORGEN,
     CONF_ZULETZT,
@@ -46,6 +48,8 @@ from .const import (
     START_OPTIONEN,
     SUBENTRY_AUFGABE,
     TYP_INTERVALL,
+    TYP_WOCHENTAG,
+    WOCHENTAGE,
 )
 from .logic import (
     Aufgabe,
@@ -53,6 +57,7 @@ from .logic import (
     anzeige_zeilen,
     berechne_intervall,
     berechne_termin,
+    berechne_wochentag,
     naechster_termin,
     parse_daten,
 )
@@ -75,6 +80,8 @@ def aufgabe_aus_subentry(subentry_id: str, title: str, data: dict) -> Aufgabe:
         frist=data.get(CONF_FRIST, FRIST_ABEND),
         startdatum=date.fromisoformat(start) if start else None,
         alle_wochen=int(data.get(CONF_ALLE_WOCHEN, 0)),
+        wochentage=sorted(WOCHENTAGE.index(t) for t in data.get(CONF_WOCHENTAGE, [])),
+        mindestabstand=int(data.get(CONF_MINDESTABSTAND, 3)),
         daten=parse_daten(data.get(CONF_DATEN)),
         staubsauger=data.get(CONF_STAUBSAUGER) or None,
     )
@@ -90,8 +97,9 @@ class HaushaltManager:
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}"
         )
         # zuletzt: {aufgabe_id: iso-datum}, erledigt: {aufgabe_id: [iso-datum, ...]},
-        # saugstart: {aufgabe_id: iso-zeitpunkt}
-        self._daten: dict = {"zuletzt": {}, "erledigt": {}, "saugstart": {}}
+        # saugstart: {aufgabe_id: iso-zeitpunkt},
+        # erstellt: {aufgabe_id: iso-datum} für noch nie erledigte Wochentag-Aufgaben
+        self._daten: dict = {"zuletzt": {}, "erledigt": {}, "saugstart": {}, "erstellt": {}}
         self.aufgaben: dict[str, Aufgabe] = {}
         self.stati: dict[str, Status] = {}
         self._saug_timer: dict[str, CALLBACK_TYPE] = {}
@@ -122,6 +130,7 @@ class HaushaltManager:
         self._daten.setdefault("zuletzt", {})
         self._daten.setdefault("erledigt", {})
         self._daten.setdefault("saugstart", {})
+        self._daten.setdefault("erstellt", {})
 
         heute = dt_util.now().date()
         for subentry in self.entry.subentries.values():
@@ -138,9 +147,18 @@ class HaushaltManager:
             if aufgabe.typ == TYP_INTERVALL and aufgabe.id not in self._daten["zuletzt"]:
                 start = subentry.data.get(CONF_ZULETZT) or heute.isoformat()
                 self._daten["zuletzt"][aufgabe.id] = start
+            elif (
+                aufgabe.typ == TYP_WOCHENTAG
+                and aufgabe.id not in self._daten["zuletzt"]
+                and aufgabe.id not in self._daten["erstellt"]
+            ):
+                if zuletzt := subentry.data.get(CONF_ZULETZT):
+                    self._daten["zuletzt"][aufgabe.id] = zuletzt
+                else:
+                    self._daten["erstellt"][aufgabe.id] = heute.isoformat()
 
         # Daten gelöschter Aufgaben entfernen
-        for schluessel in ("zuletzt", "erledigt", "saugstart"):
+        for schluessel in ("zuletzt", "erledigt", "saugstart", "erstellt"):
             for aufgabe_id in list(self._daten[schluessel]):
                 if aufgabe_id not in self.aufgaben:
                     del self._daten[schluessel][aufgabe_id]
@@ -157,6 +175,16 @@ class HaushaltManager:
                 zuletzt = date.fromisoformat(self._daten["zuletzt"][aufgabe.id])
                 stati[aufgabe.id] = berechne_intervall(
                     aufgabe, zuletzt, jetzt.date(), self._vorschau
+                )
+            elif aufgabe.typ == TYP_WOCHENTAG:
+                zuletzt_iso = self._daten["zuletzt"].get(aufgabe.id)
+                erstellt_iso = self._daten["erstellt"].get(aufgabe.id)
+                stati[aufgabe.id] = berechne_wochentag(
+                    aufgabe,
+                    date.fromisoformat(zuletzt_iso) if zuletzt_iso else None,
+                    date.fromisoformat(erstellt_iso) if erstellt_iso else jetzt.date(),
+                    jetzt.date(),
+                    self._vorschau,
                 )
             else:
                 stati[aufgabe.id] = berechne_termin(
@@ -194,8 +222,9 @@ class HaushaltManager:
                 translation_placeholders={"aufgabe_id": aufgabe_id},
             )
         jetzt = dt_util.now()
-        if aufgabe.typ == TYP_INTERVALL:
+        if aufgabe.typ in (TYP_INTERVALL, TYP_WOCHENTAG):
             self._daten["zuletzt"][aufgabe_id] = jetzt.date().isoformat()
+            self._daten["erstellt"].pop(aufgabe_id, None)
         else:
             erledigt = self._erledigte_termine(aufgabe_id)
             datum = naechster_termin(

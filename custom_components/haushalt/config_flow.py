@@ -34,15 +34,18 @@ from .const import (
     CONF_ALLE_WOCHEN,
     CONF_DATEN,
     CONF_FRIST,
+    CONF_MINDESTABSTAND,
     CONF_NAME,
     CONF_STARTDATUM,
     CONF_STAUBSAUGER,
     CONF_TAGE,
     CONF_TYP,
     CONF_VORSCHAU,
+    CONF_WOCHENTAGE,
     CONF_ZEIT_ABEND,
     CONF_ZEIT_MORGEN,
     CONF_ZULETZT,
+    DEFAULT_MINDESTABSTAND,
     DEFAULT_VORSCHAU,
     DEFAULT_ZEIT_ABEND,
     DEFAULT_ZEIT_MORGEN,
@@ -52,6 +55,8 @@ from .const import (
     SUBENTRY_AUFGABE,
     TYP_INTERVALL,
     TYP_TERMIN,
+    TYP_WOCHENTAG,
+    WOCHENTAGE,
 )
 from .logic import parse_daten
 
@@ -119,7 +124,7 @@ def _typ_schema(daten: dict[str, Any]) -> vol.Schema:
             vol.Required(CONF_NAME, default=daten.get(CONF_NAME, vol.UNDEFINED)): TextSelector(),
             vol.Required(CONF_TYP, default=daten.get(CONF_TYP, TYP_INTERVALL)): SelectSelector(
                 SelectSelectorConfig(
-                    options=[TYP_INTERVALL, TYP_TERMIN],
+                    options=[TYP_INTERVALL, TYP_WOCHENTAG, TYP_TERMIN],
                     translation_key="typ",
                     mode=SelectSelectorMode.LIST,
                 )
@@ -147,6 +152,34 @@ def _intervall_schema(daten: dict[str, Any], neu: bool) -> vol.Schema:
         felder[
             vol.Required(CONF_ZULETZT, default=dt_util.now().date().isoformat())
         ] = DateSelector()
+    felder.update(_staubsauger_feld(daten))
+    return vol.Schema(felder)
+
+
+def _wochentag_schema(daten: dict[str, Any], neu: bool) -> vol.Schema:
+    felder: dict = {
+        vol.Required(CONF_WOCHENTAGE, default=daten.get(CONF_WOCHENTAGE, [])): SelectSelector(
+            SelectSelectorConfig(
+                options=WOCHENTAGE,
+                multiple=True,
+                translation_key="wochentag",
+                mode=SelectSelectorMode.LIST,
+            )
+        ),
+        vol.Required(CONF_ALLE_WOCHEN, default=daten.get(CONF_ALLE_WOCHEN, 1)): NumberSelector(
+            NumberSelectorConfig(min=1, max=52, mode=NumberSelectorMode.BOX)
+        ),
+        vol.Optional(
+            CONF_STARTDATUM,
+            description={"suggested_value": daten.get(CONF_STARTDATUM)},
+        ): DateSelector(),
+        vol.Required(
+            CONF_MINDESTABSTAND,
+            default=daten.get(CONF_MINDESTABSTAND, DEFAULT_MINDESTABSTAND),
+        ): NumberSelector(NumberSelectorConfig(min=0, max=60, mode=NumberSelectorMode.BOX)),
+    }
+    if neu:
+        felder[vol.Optional(CONF_ZULETZT)] = DateSelector()
     felder.update(_staubsauger_feld(daten))
     return vol.Schema(felder)
 
@@ -212,6 +245,8 @@ class AufgabeFlow(ConfigSubentryFlow):
             self._daten.update(user_input)
             if user_input[CONF_TYP] == TYP_INTERVALL:
                 return await self.async_step_intervall()
+            if user_input[CONF_TYP] == TYP_WOCHENTAG:
+                return await self.async_step_wochentag()
             return await self.async_step_termin()
         return self.async_show_form(step_id=step_id, data_schema=_typ_schema(self._daten))
 
@@ -223,6 +258,26 @@ class AufgabeFlow(ConfigSubentryFlow):
             return self._fertig(user_input)
         return self.async_show_form(
             step_id="intervall", data_schema=_intervall_schema(self._daten, self._neu)
+        )
+
+    async def async_step_wochentag(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        fehler: dict[str, str] = {}
+        if user_input is not None:
+            if not user_input.get(CONF_WOCHENTAGE):
+                fehler[CONF_WOCHENTAGE] = "kein_wochentag"
+            else:
+                user_input[CONF_ALLE_WOCHEN] = int(user_input[CONF_ALLE_WOCHEN])
+                user_input[CONF_MINDESTABSTAND] = int(user_input[CONF_MINDESTABSTAND])
+                return self._fertig(user_input)
+        schema = _wochentag_schema(self._daten, self._neu)
+        return self.async_show_form(
+            step_id="wochentag",
+            data_schema=self.add_suggested_values_to_schema(schema, user_input)
+            if user_input
+            else schema,
+            errors=fehler,
         )
 
     async def async_step_termin(
@@ -256,6 +311,16 @@ class AufgabeFlow(ConfigSubentryFlow):
         if typ == TYP_INTERVALL:
             data = {CONF_TYP: typ, CONF_TAGE: user_input[CONF_TAGE]}
             if CONF_ZULETZT in user_input:
+                data[CONF_ZULETZT] = user_input[CONF_ZULETZT]
+        elif typ == TYP_WOCHENTAG:
+            data = {
+                CONF_TYP: typ,
+                CONF_WOCHENTAGE: user_input[CONF_WOCHENTAGE],
+                CONF_ALLE_WOCHEN: user_input[CONF_ALLE_WOCHEN],
+                CONF_STARTDATUM: user_input.get(CONF_STARTDATUM),
+                CONF_MINDESTABSTAND: user_input[CONF_MINDESTABSTAND],
+            }
+            if user_input.get(CONF_ZULETZT):
                 data[CONF_ZULETZT] = user_input[CONF_ZULETZT]
         else:
             data = {

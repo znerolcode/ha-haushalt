@@ -7,9 +7,12 @@ Home-Assistant-Integration für wiederkehrende Haushaltsaufgaben. Gedacht für e
 | Typ | Beispiel | Fällig | Wenn verpasst |
 | --- | --- | --- | --- |
 | Intervall | Bettwäsche alle 14 Tage | X Tage nach dem letzten Abhaken | bleibt stehen, „2 Tage überfällig“ |
+| Wochentag | Bad putzen jeden Samstag | an den gewählten Wochentagen (auch mehrere, auch alle X Wochen) | bleibt stehen, bis erledigt |
 | Termin | Altkarton alle 2 Wochen dienstags | am Termintag, Frist „Morgen“ oder „Abend“ | verschwindet nach der Frist |
 
-Anzeigetexte: Intervall „in 4 Tagen“, „morgen“, „heute“, „1 Tag überfällig“. Termin „bis in 3 Tagen“, „bis morgen früh“, „bis heute Abend“.
+Wochentag-Aufgaben haben einen Mindestabstand (Standard 3 Tage): Wird die Aufgabe z.B. am Donnerstag erledigt, entfällt der Samstag zwei Tage später, fällig ist erst der übernächste Samstag.
+
+Anzeigetexte: Intervall und Wochentag „in 4 Tagen“, „morgen“, „heute“, „1 Tag überfällig“. Termin „bis in 3 Tagen“, „bis morgen früh“, „bis heute Abend“.
 
 ## Installation über HACS
 
