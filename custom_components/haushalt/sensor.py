@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import HaushaltConfigEntry
 from .entity import AufgabeEntity, HaushaltEntity
@@ -113,7 +114,19 @@ class ListeSensor(HaushaltEntity, SensorEntity):
                 for s in sichtbar
             ],
             "anzeige": self.manager.anzeige,
+            "saugstart": self._naechster_saugstart(),
         }
+
+    def _naechster_saugstart(self) -> str:
+        """Uhrzeit des nächsten geplanten Saugstarts, z.B. '17:05', sonst leer."""
+        starts = [
+            zeit
+            for aufgabe_id in self.manager.aufgaben
+            if (zeit := self.manager.saugstart(aufgabe_id)) is not None
+        ]
+        if not starts:
+            return ""
+        return dt_util.as_local(min(starts)).strftime("%H:%M")
 
 
 class WetterSensor(HaushaltEntity, SensorEntity):

@@ -224,6 +224,7 @@ async def test_saugen_verzoegert(hass, entry, freezer: FrozenDateTimeFactory):
         "start_in_min": 20,
     }
     assert hass.states.get(saugstart).state == "2026-10-26T11:20:00+00:00"
+    assert hass.states.get("sensor.aufgaben").attributes["saugstart"] == "12:20"
 
     await zeit_vor(hass, freezer, 19)
     assert not starts
@@ -231,6 +232,7 @@ async def test_saugen_verzoegert(hass, entry, freezer: FrozenDateTimeFactory):
     assert len(starts) == 1
     assert starts[0].data == {"entity_id": "vacuum.robi"}
     assert hass.states.get(saugstart).state == "unknown"
+    assert hass.states.get("sensor.aufgaben").attributes["saugstart"] == ""
 
 
 async def test_saugen_sofort_und_abbrechen(hass, entry, freezer: FrozenDateTimeFactory):
