@@ -17,6 +17,7 @@ from homeassistant.helpers.event import (
     async_track_point_in_time,
     async_track_time_interval,
 )
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -32,6 +33,7 @@ from .const import (
     CONF_TYP,
     CONF_MINDESTABSTAND,
     CONF_VORSCHAU,
+    CONF_WETTER,
     CONF_WOCHENTAGE,
     CONF_ZEIT_ABEND,
     CONF_ZEIT_MORGEN,
@@ -49,6 +51,7 @@ from .const import (
     SUBENTRY_AUFGABE,
     TYP_INTERVALL,
     TYP_WOCHENTAG,
+    WETTER_INTERVALL_MIN,
     WOCHENTAGE,
 )
 from .logic import (
@@ -61,6 +64,7 @@ from .logic import (
     naechster_termin,
     parse_daten,
 )
+from .wetter import WetterDienst
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,11 +102,15 @@ class HaushaltManager:
         )
         # zuletzt: {aufgabe_id: iso-datum}, erledigt: {aufgabe_id: [iso-datum, ...]},
         # saugstart: {aufgabe_id: iso-zeitpunkt},
-        # erstellt: {aufgabe_id: iso-datum} für noch nie erledigte Wochentag-Aufgaben
-        self._daten: dict = {"zuletzt": {}, "erledigt": {}, "saugstart": {}, "erstellt": {}}
+        # erstellt: {aufgabe_id: iso-datum} für noch nie erledigte Wochentag-Aufgaben,
+        # wetter: Zwischenspeicher für den heutigen Vormittag
+        self._daten: dict = {
+            "zuletzt": {}, "erledigt": {}, "saugstart": {}, "erstellt": {}, "wetter": {}
+        }
         self.aufgaben: dict[str, Aufgabe] = {}
         self.stati: dict[str, Status] = {}
         self._saug_timer: dict[str, CALLBACK_TYPE] = {}
+        self.wetter: WetterDienst | None = None
 
     @property
     def signal(self) -> str:
@@ -131,6 +139,9 @@ class HaushaltManager:
         self._daten.setdefault("erledigt", {})
         self._daten.setdefault("saugstart", {})
         self._daten.setdefault("erstellt", {})
+        self._daten.setdefault("wetter", {})
+        if wetter_id := self.entry.options.get(CONF_WETTER):
+            self.wetter = WetterDienst(self.hass, wetter_id, self._daten["wetter"])
 
         heute = dt_util.now().date()
         for subentry in self.entry.subentries.values():
@@ -209,6 +220,13 @@ class HaushaltManager:
     @callback
     def aktualisieren(self, *_args) -> None:
         self.berechnen()
+        async_dispatcher_send(self.hass, self.signal)
+
+    async def async_wetter_aktualisieren(self, *_args) -> None:
+        if self.wetter is None:
+            return
+        if await self.wetter.async_aktualisieren():
+            await self._store.async_save(self._daten)
         async_dispatcher_send(self.hass, self.signal)
 
     async def async_erledigt(
@@ -333,6 +351,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaushaltConfigEntry) -> 
         async_track_time_interval(hass, manager.aktualisieren, timedelta(minutes=1))
     )
     entry.async_on_unload(manager.timer_stoppen)
+    if manager.wetter is not None:
+        entry.async_on_unload(
+            async_track_time_interval(
+                hass,
+                manager.async_wetter_aktualisieren,
+                timedelta(minutes=WETTER_INTERVALL_MIN),
+            )
+        )
+
+        async def _wetter_beim_start(_hass: HomeAssistant) -> None:
+            await manager.async_wetter_aktualisieren()
+
+        entry.async_on_unload(async_at_started(hass, _wetter_beim_start))
     entry.async_on_unload(entry.add_update_listener(_async_neu_laden))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
@@ -21,6 +22,8 @@ async def async_setup_entry(
 ) -> None:
     manager = entry.runtime_data
     async_add_entities([ListeSensor(manager, entry.entry_id)])
+    if manager.wetter is not None:
+        async_add_entities([WetterSensor(manager, entry.entry_id)])
     for aufgabe_id, aufgabe in manager.aufgaben.items():
         sensoren: list[SensorEntity] = [AufgabeSensor(manager, aufgabe_id)]
         if aufgabe.staubsauger:
@@ -110,4 +113,36 @@ class ListeSensor(HaushaltEntity, SensorEntity):
                 for s in sichtbar
             ],
             "anzeige": self.manager.anzeige,
+        }
+
+
+class WetterSensor(HaushaltEntity, SensorEntity):
+    """Wetter fürs Display: heute und die nächsten 2 Tage, je Vormittag und Nachmittag."""
+
+    _attr_translation_key = "wetter"
+    _attr_icon = "mdi:weather-partly-cloudy"
+
+    def __init__(self, manager, entry_id: str) -> None:
+        super().__init__(manager)
+        self._attr_unique_id = f"{entry_id}_wetter"
+
+    @property
+    def native_value(self) -> str | None:
+        aktuell = self.manager.wetter.aktuell
+        return aktuell.zustand if aktuell and aktuell.zustand else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        wetter = self.manager.wetter
+        return {
+            "wetter_entitaet": wetter.entity_id,
+            "tage": [
+                {
+                    "tag": name,
+                    "vormittag": asdict(vm) if vm else None,
+                    "nachmittag": asdict(nm) if nm else None,
+                }
+                for name, vm, nm in wetter.tage
+            ],
+            "anzeige": wetter.anzeige,
         }

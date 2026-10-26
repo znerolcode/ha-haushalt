@@ -41,6 +41,7 @@ from .const import (
     CONF_TAGE,
     CONF_TYP,
     CONF_VORSCHAU,
+    CONF_WETTER,
     CONF_WOCHENTAGE,
     CONF_ZEIT_ABEND,
     CONF_ZEIT_MORGEN,
@@ -113,6 +114,10 @@ class HaushaltOptionsFlow(OptionsFlow):
                 ): NumberSelector(
                     NumberSelectorConfig(min=1, max=60, mode=NumberSelectorMode.BOX)
                 ),
+                vol.Optional(
+                    CONF_WETTER,
+                    description={"suggested_value": optionen.get(CONF_WETTER)},
+                ): EntitySelector(EntitySelectorConfig(domain="weather")),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
