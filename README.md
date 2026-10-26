@@ -51,3 +51,5 @@ Nach jedem Abhaken feuert `haushalt_erledigt` mit `aufgabe_id`, `name` und `star
 pip install -r requirements_test.txt
 pytest
 ```
+
+Neue Versionen: Wird die `version` in `manifest.json` erhöht und auf `main` gemergt, legt GitHub automatisch ein Release `vX.Y.Z` an. HACS zeigt dann die Versionsnummer und bietet das Update an.
