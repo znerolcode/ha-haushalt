@@ -1,0 +1,38 @@
+# Beispiel: So sieht die Gerätekonfiguration in ESPHome aus.
+# Der obere Teil kommt so von ESPHome beim Anlegen des Geräts (Schlüssel und Passwörter sind dort echt).
+esphome:
+  name: flur-display
+  friendly_name: Flur-Display
+
+esp32:
+  board: esp32dev
+
+logger:
+
+api:
+  encryption:
+    key: "HIER-STEHT-DEIN-SCHLUESSEL"
+
+ota:
+  - platform: esphome
+    password: "HIER-STEHT-DEIN-PASSWORT"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Flur-Display Fallback Hotspot"
+    password: "HIER-STEHT-EIN-PASSWORT"
+
+captive_portal:
+
+# Dieser Teil kommt dazu:
+substitutions:
+  innen_temperatur: sensor.flur_temperatur  # deinen Temperatursensor eintragen
+
+packages:
+  flur_display:
+    url: https://github.com/znerolcode/ha-haushalt
+    ref: main
+    files: [esphome/flur-display.yaml]
+    refresh: 1d
