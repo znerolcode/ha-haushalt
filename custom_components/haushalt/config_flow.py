@@ -17,6 +17,8 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     DateSelector,
+    EntitySelector,
+    EntitySelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -34,6 +36,7 @@ from .const import (
     CONF_FRIST,
     CONF_NAME,
     CONF_STARTDATUM,
+    CONF_STAUBSAUGER,
     CONF_TAGE,
     CONF_TYP,
     CONF_VORSCHAU,
@@ -125,6 +128,15 @@ def _typ_schema(daten: dict[str, Any]) -> vol.Schema:
     )
 
 
+def _staubsauger_feld(daten: dict[str, Any]) -> dict:
+    return {
+        vol.Optional(
+            CONF_STAUBSAUGER,
+            description={"suggested_value": daten.get(CONF_STAUBSAUGER)},
+        ): EntitySelector(EntitySelectorConfig(domain="vacuum")),
+    }
+
+
 def _intervall_schema(daten: dict[str, Any], neu: bool) -> vol.Schema:
     felder: dict = {
         vol.Required(CONF_TAGE, default=daten.get(CONF_TAGE, 7)): NumberSelector(
@@ -135,6 +147,7 @@ def _intervall_schema(daten: dict[str, Any], neu: bool) -> vol.Schema:
         felder[
             vol.Required(CONF_ZULETZT, default=dt_util.now().date().isoformat())
         ] = DateSelector()
+    felder.update(_staubsauger_feld(daten))
     return vol.Schema(felder)
 
 
@@ -159,6 +172,7 @@ def _termin_schema(daten: dict[str, Any]) -> vol.Schema:
                 CONF_DATEN,
                 description={"suggested_value": daten.get(CONF_DATEN)},
             ): TextSelector(),
+            **_staubsauger_feld(daten),
         }
     )
 
@@ -251,6 +265,8 @@ class AufgabeFlow(ConfigSubentryFlow):
                 CONF_ALLE_WOCHEN: user_input[CONF_ALLE_WOCHEN],
                 CONF_DATEN: user_input.get(CONF_DATEN, ""),
             }
+        if user_input.get(CONF_STAUBSAUGER):
+            data[CONF_STAUBSAUGER] = user_input[CONF_STAUBSAUGER]
         if self._neu:
             return self.async_create_entry(title=name, data=data)
         return self.async_update_and_abort(
