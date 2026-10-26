@@ -1,0 +1,7 @@
+erledigt:
+  fields:
+    aufgabe_id:
+      required: true
+      example: "01JABCDEF..."
+      selector:
+        text:
