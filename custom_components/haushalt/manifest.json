@@ -1,0 +1,12 @@
+{
+  "domain": "haushalt",
+  "name": "Haushalt",
+  "codeowners": ["@znerolcode"],
+  "config_flow": true,
+  "documentation": "https://github.com/znerolcode/ha-haushalt",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/znerolcode/ha-haushalt/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

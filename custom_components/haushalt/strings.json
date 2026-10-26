@@ -1,0 +1,119 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Haushalt",
+        "description": "Richtet die Haushalt-Integration ein. Aufgaben fügst du danach unter dem Eintrag mit \"Aufgabe hinzufügen\" hinzu."
+      }
+    },
+    "abort": {
+      "already_configured": "Haushalt ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Einstellungen",
+        "data": {
+          "zeit_morgen": "Frist \"Morgen\" endet um",
+          "zeit_abend": "Frist \"Abend\" endet um",
+          "vorschau_tage": "Aufgaben so viele Tage im Voraus anzeigen"
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "aufgabe": {
+      "entry_type": "Aufgabe",
+      "initiate_flow": {
+        "user": "Aufgabe hinzufügen"
+      },
+      "step": {
+        "user": {
+          "title": "Neue Aufgabe",
+          "data": {
+            "name": "Name",
+            "typ": "Typ"
+          },
+          "data_description": {
+            "typ": "Intervall: alle X Tage, gezählt ab dem letzten Abhaken. Termin: muss bis zu einem bestimmten Tag erledigt sein und verschwindet, wenn die Frist verpasst ist."
+          }
+        },
+        "reconfigure_typ": {
+          "title": "Aufgabe bearbeiten",
+          "data": {
+            "name": "Name",
+            "typ": "Typ"
+          }
+        },
+        "intervall": {
+          "title": "Intervall",
+          "data": {
+            "tage": "Alle wie viele Tage",
+            "zuletzt_erledigt": "Zuletzt erledigt am"
+          }
+        },
+        "termin": {
+          "title": "Termin",
+          "data": {
+            "frist": "Frist",
+            "startdatum": "Erster Termin",
+            "alle_wochen": "Wiederholen alle X Wochen (0 = nicht wiederholen)",
+            "weitere_daten": "Weitere einzelne Termine"
+          },
+          "data_description": {
+            "startdatum": "Der Wochentag dieses Datums bestimmt die Wiederholung.",
+            "weitere_daten": "Optional, z.B. aus dem Abfuhrkalender: 05.11.2026, 19.11.2026"
+          }
+        }
+      },
+      "error": {
+        "ungueltige_daten": "Bitte Daten im Format TT.MM.JJJJ eingeben, getrennt durch Kommas.",
+        "kein_termin": "Bitte einen ersten Termin oder einzelne Termine angeben."
+      },
+      "abort": {
+        "reconfigure_successful": "Aufgabe gespeichert."
+      }
+    }
+  },
+  "selector": {
+    "typ": {
+      "options": {
+        "intervall": "Intervall (z.B. Bettwäsche alle 14 Tage)",
+        "termin": "Termin (z.B. Altkarton bis Dienstagmorgen)"
+      }
+    },
+    "frist": {
+      "options": {
+        "morgen": "Morgen (bis früh am Termintag)",
+        "abend": "Abend (bis Ende Termintag)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "faelligkeit": { "name": "Fälligkeit" },
+      "liste": { "name": "Aufgaben" }
+    },
+    "button": {
+      "erledigt": { "name": "Erledigt" }
+    }
+  },
+  "services": {
+    "erledigt": {
+      "name": "Aufgabe erledigt",
+      "description": "Hakt eine Aufgabe ab.",
+      "fields": {
+        "aufgabe_id": {
+          "name": "Aufgaben-ID",
+          "description": "Die ID der Aufgabe, steht im Attribut aufgabe_id des Fälligkeits-Sensors."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "unbekannte_aufgabe": {
+      "message": "Unbekannte Aufgabe: {aufgabe_id}"
+    }
+  }
+}
