@@ -285,3 +285,44 @@ async def test_ohne_staubsauger_keine_auswahl(hass, entry):
     _, sub = sensor_id(hass, entry, "Bad putzen")
     assert knopf_id(hass, sub, "erledigt_5") is None
     assert hass.states.get(knopf_id(hass, sub, "erledigt")).name.endswith("Erledigt")
+
+
+async def test_wochentag(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactory):
+    result = await hass.config_entries.subentries.async_init(
+        (entry.entry_id, SUBENTRY_AUFGABE), context={"source": SOURCE_USER}
+    )
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {"name": "Bad putzen", "typ": "wochentag"}
+    )
+    assert result["step_id"] == "wochentag"
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {"wochentage": [], "alle_wochen": 1, "mindestabstand": 3}
+    )
+    assert result["errors"] == {"wochentage": "kein_wochentag"}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {"wochentage": ["sa"], "alle_wochen": 1, "mindestabstand": 3}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    bad, sub = sensor_id(hass, entry, "Bad putzen")
+    # Montag 26.10. -> Samstag 31.10.
+    assert hass.states.get(bad).state == "in 5 Tagen"
+
+    # Am Donnerstag erledigt -> Samstag wird übersprungen
+    freezer.move_to(datetime(2026, 10, 29, 18, 0, tzinfo=START.tzinfo))
+    await hass.services.async_call(
+        DOMAIN, "erledigt", {"aufgabe_id": sub.subentry_id}, blocking=True
+    )
+    assert hass.states.get(bad).attributes["faellig_am"] == "2026-11-07"
+
+    # Samstag 7.11. verpasst -> am Montag überfällig
+    freezer.move_to(datetime(2026, 11, 9, 9, 0, tzinfo=START.tzinfo))
+    hass.config_entries.async_get_entry(entry.entry_id).runtime_data.aktualisieren()
+    await hass.async_block_till_done()
+    assert hass.states.get(bad).state == "2 Tage überfällig"
+
+    # Bleibt nach Neustart erhalten
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(bad).state == "2 Tage überfällig"

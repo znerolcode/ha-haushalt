@@ -36,7 +36,7 @@
             "typ": "Typ"
           },
           "data_description": {
-            "typ": "Intervall: alle X Tage, gezählt ab dem letzten Abhaken. Termin: muss bis zu einem bestimmten Tag erledigt sein und verschwindet, wenn die Frist verpasst ist."
+            "typ": "Intervall: alle X Tage, gezählt ab dem letzten Abhaken. Wochentag: an festen Wochentagen fällig, bleibt überfällig bis erledigt. Termin: muss bis zu einem bestimmten Tag erledigt sein und verschwindet, wenn die Frist verpasst ist."
           }
         },
         "reconfigure_typ": {
@@ -71,11 +71,30 @@
             "weitere_daten": "Optional, z.B. aus dem Abfuhrkalender: 05.11.2026, 19.11.2026",
             "staubsauger": "Optional. Beim Abhaken wählst du, ob er sofort oder in 5, 20 oder 60 Minuten die ganze Wohnung saugt."
           }
+        },
+        "wochentag": {
+          "title": "Wochentag",
+          "data": {
+            "wochentage": "An diesen Wochentagen",
+            "alle_wochen": "Alle X Wochen",
+            "startdatum": "Ab Datum",
+            "mindestabstand": "Mindestabstand in Tagen",
+            "zuletzt_erledigt": "Zuletzt erledigt am",
+            "staubsauger": "Staubsauger"
+          },
+          "data_description": {
+            "alle_wochen": "1 = jede Woche, 2 = jede zweite Woche usw.",
+            "startdatum": "Optional. Bei \"alle 2 Wochen\" oder mehr legt die Woche dieses Datums fest, welche Wochen zählen.",
+            "mindestabstand": "Ein Wochentag wird übersprungen, wenn die Aufgabe weniger als so viele Tage vorher erledigt wurde.",
+            "zuletzt_erledigt": "Optional. Leer lassen, wenn die Aufgabe ab dem nächsten passenden Wochentag gelten soll.",
+            "staubsauger": "Optional. Beim Abhaken wählst du, ob er sofort oder in 5, 20 oder 60 Minuten die ganze Wohnung saugt."
+          }
         }
       },
       "error": {
         "ungueltige_daten": "Bitte Daten im Format TT.MM.JJJJ eingeben, getrennt durch Kommas.",
-        "kein_termin": "Bitte einen ersten Termin oder einzelne Termine angeben."
+        "kein_termin": "Bitte einen ersten Termin oder einzelne Termine angeben.",
+        "kein_wochentag": "Bitte mindestens einen Wochentag wählen."
       },
       "abort": {
         "reconfigure_successful": "Aufgabe gespeichert."
@@ -86,13 +105,25 @@
     "typ": {
       "options": {
         "intervall": "Intervall (z.B. Bettwäsche alle 14 Tage)",
-        "termin": "Termin (z.B. Altkarton bis Dienstagmorgen)"
+        "termin": "Termin (z.B. Altkarton bis Dienstagmorgen)",
+        "wochentag": "Wochentag (z.B. Bad putzen jeden Samstag)"
       }
     },
     "frist": {
       "options": {
         "morgen": "Morgen (bis früh am Termintag)",
         "abend": "Abend (bis Ende Termintag)"
+      }
+    },
+    "wochentag": {
+      "options": {
+        "mo": "Montag",
+        "di": "Dienstag",
+        "mi": "Mittwoch",
+        "do": "Donnerstag",
+        "fr": "Freitag",
+        "sa": "Samstag",
+        "so": "Sonntag"
       }
     }
   },
