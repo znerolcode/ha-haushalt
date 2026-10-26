@@ -445,7 +445,7 @@ display:
       }
 
       // ---- Wetter: pro Tag Vormittag und Nachmittag ----
-      // Zeilen aus sensor.display_wetter: tag|zustand|temp|regen|zustand|temp|regen
+      // Zeilen aus sensor.display_wetter: tag|zustand|temp|regen|menge|zustand|temp|regen|menge
       auto symbol = [](const std::string &z) -> const char * {
         if (z == "sunny" || z == "clear-night") return "\U000F0599";
         if (z == "partlycloudy") return "\U000F0595";
@@ -470,15 +470,15 @@ display:
         auto zeilen = teilen(id(wetter).state, '\n');
         for (int t = 0; t < 3 && t < (int) zeilen.size(); t++) {
           auto f = teilen(zeilen[t], '|');
-          f.resize(7);
+          f.resize(9);
           int ty = 96 + t * 126;
           it.print(WX, ty, id(f_wtag), SCHWARZ, TextAlign::TOP_LEFT, f[0].c_str());
           for (int hf = 0; hf < 2; hf++) {
             int hx = WX + hf * (WB / 2 + 6);
             int hy = ty + 28;
-            const std::string &zustand = f[1 + hf * 3], &regen = f[3 + hf * 3];
-            std::string temp = f[2 + hf * 3];
-            if (hf == 1) it.filled_rectangle(hx - 8, hy, 2, 62, SCHWARZ);
+            const std::string &zustand = f[1 + hf * 4], &regen = f[3 + hf * 4], &menge = f[4 + hf * 4];
+            std::string temp = f[2 + hf * 4];
+            if (hf == 1) it.filled_rectangle(hx - 8, hy, 2, 76, SCHWARZ);
             it.print(hx, hy + 30, id(f_symbol), SCHWARZ, TextAlign::CENTER_LEFT, zustand.empty() ? "" : symbol(zustand));
             // Echtes Minuszeichen statt Bindestrich, besser lesbar
             if (!temp.empty() && temp[0] == '-') temp = "−" + temp.substr(1);
@@ -486,11 +486,17 @@ display:
               it.print(hx + 42, hy + 2, id(f_wtemp), SCHWARZ, TextAlign::TOP_LEFT, "–");
             else
               it.printf(hx + 42, hy + 2, id(f_wtemp), SCHWARZ, TextAlign::TOP_LEFT, "%s°", temp.c_str());
-            if (!regen.empty()) {
-              // Tropfen für Regen, Schneeflocke für Schnee
-              bool schnee = zustand == "snowy";
-              it.print(hx + 40, hy + 44, id(f_symbol_klein), SCHWARZ, TextAlign::CENTER_LEFT, schnee ? "\U000F0717" : "\U000F058C");
-              it.print(hx + 62, hy + 34, id(f_wregen), SCHWARZ, TextAlign::TOP_LEFT, regen.c_str());
+            // Wahrscheinlichkeit, darunter die Menge; Tropfen für Regen, Schneeflocke für Schnee
+            int zeile = 0;
+            for (const std::string *wert : {&regen, &menge}) {
+              if (wert->empty()) continue;
+              int wy = hy + 34 + zeile * 22;
+              if (zeile == 0) {
+                bool schnee = zustand == "snowy";
+                it.print(hx + 40, wy + 10, id(f_symbol_klein), SCHWARZ, TextAlign::CENTER_LEFT, schnee ? "\U000F0717" : "\U000F058C");
+              }
+              it.print(hx + 62, wy, id(f_wregen), SCHWARZ, TextAlign::TOP_LEFT, wert->c_str());
+              zeile++;
             }
           }
           if (t < 2) it.filled_rectangle(WX, ty + 118, WB, 2, SCHWARZ);

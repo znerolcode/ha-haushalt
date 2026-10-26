@@ -46,7 +46,7 @@ def test_vormittag_haeufigster_zustand_max_temp_und_regen():
     ]
     h = haelfte_aus_stunden(stunden, TAG, VORMITTAG, ZONE)
     # sunny 3x (inkl. klarer Nacht), cloudy 2x
-    assert h == Haelfte("sunny", 10, "40 %")
+    assert h == Haelfte("sunny", 10, "40 %", "")
 
 
 def test_gleichstand_nimmt_das_schlechtere_wetter():
@@ -54,9 +54,18 @@ def test_gleichstand_nimmt_das_schlechtere_wetter():
     assert haelfte_aus_stunden(stunden, TAG, NACHMITTAG, ZONE).zustand == "rainy"
 
 
-def test_regen_in_mm_wenn_keine_wahrscheinlichkeit():
+def test_wahrscheinlichkeit_und_menge():
+    stunden = [stunde(12, "rainy", 10, 30, mm=0.4), stunde(13, "rainy", 11, 60, mm=0.8)]
+    h = haelfte_aus_stunden(stunden, TAG, NACHMITTAG, ZONE)
+    assert (h.regen, h.menge) == ("60 %", "1,2 mm")
+
+
+def test_nur_menge_und_null_mm():
     stunden = [stunde(12, "rainy", 10, mm=0.4), stunde(13, "rainy", 11, mm=0.8)]
-    assert haelfte_aus_stunden(stunden, TAG, NACHMITTAG, ZONE).regen == "1,2 mm"
+    h = haelfte_aus_stunden(stunden, TAG, NACHMITTAG, ZONE)
+    assert (h.regen, h.menge) == ("", "1,2 mm")
+    trocken = [stunde(12, "sunny", 10, 0, mm=0.0)]
+    assert haelfte_aus_stunden(trocken, TAG, NACHMITTAG, ZONE).menge == ""
 
 
 def test_sechsstuendliche_eintraege():
@@ -77,8 +86,8 @@ def test_tagesvorhersage_als_ersatz():
 
 def test_anzeige_zeile():
     assert (
-        anzeige_zeile("Heute", Haelfte("sunny", 8, "0 %"), None)
-        == "Heute|sunny|8|0 %|||"
+        anzeige_zeile("Heute", Haelfte("sunny", 8, "0 %", "0,5 mm"), None)
+        == "Heute|sunny|8|0 %|0,5 mm||||"
     )
 
 
@@ -135,7 +144,7 @@ async def test_sensor(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactory
     # START ist Montag 12:00: Vorhersage ab jetzt, also kein stündlicher Vormittag
     zeilen = zustand.attributes["anzeige"].splitlines()
     assert len(zeilen) == 3
-    assert zeilen[0] == "Heute|cloudy|15||rainy|11|50 %"
+    assert zeilen[0] == "Heute|cloudy|15|||rainy|11|50 %|"
     assert zeilen[1].startswith("Dienstag|sunny|")
     assert zeilen[2].startswith("Mittwoch|")
     assert zustand.state == "rainy"
@@ -161,7 +170,7 @@ async def test_vormittag_bleibt_nachmittags_stehen(
     )
     await hass.async_block_till_done()
     vormittag = hass.states.get("sensor.display_wetter").attributes["anzeige"].split("\n")[0]
-    assert vormittag.startswith("Heute|rainy|11|50 %|")
+    assert vormittag.startswith("Heute|rainy|11|50 %||")
 
     # Um 14 Uhr liefert die Vorhersage keinen Vormittag mehr, er kommt aus dem Speicher
     freezer.move_to(START.replace(hour=14))
@@ -170,4 +179,4 @@ async def test_vormittag_bleibt_nachmittags_stehen(
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     jetzt = hass.states.get("sensor.display_wetter").attributes["anzeige"].split("\n")[0]
-    assert jetzt.split("|")[1:4] == vormittag.split("|")[1:4]
+    assert jetzt.split("|")[1:5] == vormittag.split("|")[1:5]

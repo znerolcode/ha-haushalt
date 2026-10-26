@@ -46,7 +46,8 @@ class Haelfte:
 
     zustand: str
     temperatur: int | None
-    regen: str  # fertig formatiert, z.B. "40 %" oder "1,2 mm"; leer, wenn unbekannt
+    regen: str  # Wahrscheinlichkeit, z.B. "40 %"; leer, wenn unbekannt
+    menge: str = ""  # Regenmenge, z.B. "1,2 mm"; leer, wenn unbekannt oder 0
 
 
 def _zustand(werte: list[str]) -> str:
@@ -67,13 +68,15 @@ def _regen(eintraege: list[dict[str, Any]]) -> str:
         for e in eintraege
         if e.get("precipitation_probability") is not None
     ]
-    if prozent:
-        return f"{round(max(prozent))} %"
+    return f"{round(max(prozent))} %" if prozent else ""
+
+
+def _menge(eintraege: list[dict[str, Any]]) -> str:
     mm = [e["precipitation"] for e in eintraege if e.get("precipitation") is not None]
-    if mm:
-        summe = round(sum(mm), 1)
-        return f"{summe:g} mm".replace(".", ",")
-    return ""
+    summe = round(sum(mm), 1)
+    if summe <= 0:
+        return ""
+    return f"{summe:g} mm".replace(".", ",")
 
 
 def _lokal(eintrag: dict[str, Any], zone: tzinfo) -> datetime | None:
@@ -108,6 +111,7 @@ def haelfte_aus_stunden(
         zustand=_zustand([e.get("condition") or "" for e in passend]),
         temperatur=round(max(temperaturen)) if temperaturen else None,
         regen=_regen(passend),
+        menge=_menge(passend),
     )
 
 
@@ -123,6 +127,7 @@ def haelfte_aus_tag(
                 zustand=_zustand([eintrag.get("condition") or ""]),
                 temperatur=round(temperatur) if temperatur is not None else None,
                 regen=_regen([eintrag]),
+                menge=_menge([eintrag]),
             )
     return None
 
@@ -134,14 +139,14 @@ def tag_name(tag: date, heute: date) -> str:
 
 
 def anzeige_zeile(name: str, vm: Haelfte | None, nm: Haelfte | None) -> str:
-    """name|zustand|temp|regen|zustand|temp|regen, unbekannte Felder leer."""
+    """name|zustand|temp|regen|menge|zustand|temp|regen|menge, unbekannte Felder leer."""
     felder = [name]
     for h in (vm, nm):
         if h is None:
-            felder += ["", "", ""]
+            felder += ["", "", "", ""]
         else:
             temp = "" if h.temperatur is None else str(h.temperatur)
-            felder += [h.zustand, temp, h.regen]
+            felder += [h.zustand, temp, h.regen, h.menge]
     return "|".join(felder)
 
 
