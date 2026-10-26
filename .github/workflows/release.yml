@@ -1,0 +1,24 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release anlegen, wenn die Version im Manifest neu ist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(jq -r .version custom_components/haushalt/manifest.json)
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "Release v$version existiert schon."
+            exit 0
+          fi
+          gh release create "v$version" --target "$GITHUB_SHA" --title "$version" --generate-notes
