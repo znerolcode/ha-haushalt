@@ -23,9 +23,10 @@ time:
     id: zeit
     timezone: Europe/Zurich
     on_time_sync:
-      - component.update: epaper
+      - script.execute: zeichnen
     on_time:
-      # Alle 15 Minuten neu zeichnen, nachts (23 bis 6 Uhr) nicht
+      # Alle 15 Minuten neu zeichnen, nachts (23 bis 6 Uhr) nicht.
+      # Zur vollen Stunde ganz neu aufbauen (kurzes Flackern), das löscht Geisterbilder.
       - minutes: /15
         seconds: 0
         then:
@@ -33,7 +34,8 @@ time:
               condition:
                 lambda: 'return id(zeit).now().hour >= 6 && id(zeit).now().hour < 23;'
               then:
-                - component.update: epaper
+                - lambda: 'if (id(zeit).now().minute == 0) id(voll_noetig) = true;'
+                - script.execute: zeichnen
 
 text_sensor:
   - platform: homeassistant
@@ -116,7 +118,28 @@ switch:
     restore_mode: ALWAYS_ON
     internal: true
 
+globals:
+  # Nächstes Zeichnen als vollen Aufbau statt Teil-Aktualisierung.
+  # Beim Start an, damit das Warte-Bild keinen Schatten hinterlässt.
+  - id: voll_noetig
+    type: bool
+    initial_value: 'true'
+
 script:
+  # Zeichnen, bei Bedarf als voller Aufbau
+  - id: zeichnen
+    then:
+      - if:
+          condition:
+            lambda: 'return id(voll_noetig);'
+          then:
+            - lambda: |-
+                id(voll_noetig) = false;
+                id(epaper).set_full_update_every(1);
+            - component.update: epaper
+            - lambda: 'id(epaper).set_full_update_every(30);'
+          else:
+            - component.update: epaper
   # Nach jeder Eingabe: sofort zeichnen, dann Zeitlimits abwarten
   - id: nach_eingabe
     mode: restart
@@ -148,7 +171,7 @@ script:
               int h = id(zeit).now().is_valid() ? id(zeit).now().hour : 12;
               return flur::cursor >= 0 || (h >= 6 && h < 23);
           then:
-            - component.update: epaper
+            - script.execute: zeichnen
 
 spi:
   clk_pin: GPIO18
