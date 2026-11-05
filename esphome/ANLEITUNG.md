@@ -17,21 +17,21 @@ Alles wird gesteckt, nichts gelötet. Strom erst anschliessen, wenn alles verkab
 
 ### Display (Treiberplatine) → ESP32
 
-Die Farben sind die des Waveshare-Kabels. Massgebend ist die Beschriftung auf der Treiberplatine.
+Massgebend ist die Beschriftung auf der Treiberplatine. Die Kabelfarben gelten für die Treiberplatine Rev 2.3 und können bei anderen Versionen abweichen.
 
 | Treiberplatine | Kabelfarbe | ESP32-Pin | Beschriftung auf dem Board |
 |---|---|---|---|
-| VCC | grau | 3V3 | 3V3 |
-| GND | braun | GND | GND |
+| VCC | rot | 3V3 | 3V3 |
+| GND | schwarz | GND | GND |
 | DIN | blau | GPIO23 | D23 |
 | CLK | gelb | GPIO18 | D18 |
 | CS | orange | GPIO5 | D5 |
 | DC | grün | GPIO17 | TX2 |
 | RST | weiss | GPIO16 | RX2 |
 | BUSY | violett | GPIO4 | D4 |
-| PWR (nur falls vorhanden, 9. Ader) | rot | GPIO26 | D26 |
+| PWR (nur falls vorhanden, 9. Ader) | braun | GPIO26 | D26 |
 
-Auf der Treiberplatine gibt es zwei kleine Schalter. **Interface Config** muss auf **0** stehen (4-Draht-SPI). **Display Config** lässt du vorerst, wie er geliefert wurde.
+Auf der Treiberplatine gibt es zwei kleine Schalter. **Interface Config** muss auf **0** stehen (4-Draht-SPI). **Display Config** auf **B** (0.47R).
 
 ### Drehregler (KY-040) → ESP32
 
@@ -105,5 +105,8 @@ sensor:
 ```
 
   Für die Richtung CLK und DT am ESP32 tauschen.
+- **Gerät startet immer wieder neu** („Task wdt“ im Protokoll): Die Firmware setzt `watchdog_timeout: 30s`. Steht in deiner Gerätekonfiguration unter `esp32:` ein kleinerer Wert, diesen entfernen.
+- **Kein Port beim Aufspielen**: anderes USB-Kabel probieren (viele können nur laden) oder den Treiber für den USB-Chip installieren (CP2102 oder CH340, steht auf dem Chip neben dem USB-Anschluss).
+- **Home Assistant findet das Gerät nicht unter `name.local`**: die IP-Adresse eintragen, sie steht im Protokoll bei „IP Address“.
 - **Abhaken tut nichts**: Schritt 3 („Allow the device to perform Home Assistant actions“) prüfen.
 - **Wetter fehlt**: In der Haushalt-Integration unter **Konfigurieren** eine Wetter-Entität wählen. Es muss `sensor.display_wetter` geben.

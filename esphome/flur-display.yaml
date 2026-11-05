@@ -6,6 +6,10 @@ substitutions:
   # Sensor für die Innentemperatur in der Kopfzeile, in der Gerätekonfiguration überschreiben
   innen_temperatur: sensor.flur_temperatur
 
+esp32:
+  # Ein volles Bild an das Display zu senden dauert länger als die üblichen 5 Sekunden
+  watchdog_timeout: 30s
+
 esphome:
   includes:
     - flur_display.h
