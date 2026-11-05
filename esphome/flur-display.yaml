@@ -6,6 +6,17 @@ substitutions:
   # Sensor für die Innentemperatur in der Kopfzeile, in der Gerätekonfiguration überschreiben
   innen_temperatur: sensor.flur_temperatur
 
+# Angepasster Display-Treiber aus diesem Repository: sendet das Bild in einem Stück
+# statt Byte für Byte (sonst dauert jeder Schritt mehrere Sekunden)
+external_components:
+  - source:
+      type: git
+      url: https://github.com/znerolcode/ha-haushalt
+      ref: main
+      path: esphome/components
+    components: [waveshare_epaper]
+    refresh: 1d
+
 esp32:
   # Ein volles Bild an das Display zu senden dauert länger als die üblichen 5 Sekunden
   watchdog_timeout: 30s
@@ -26,7 +37,7 @@ time:
       - script.execute: zeichnen
     on_time:
       # Alle 15 Minuten neu zeichnen, nachts (23 bis 6 Uhr) nicht.
-      # Zur vollen Stunde Reinigungsdurchgang (ca. 6 s Flackern), das löscht Geisterbilder.
+      # Zur vollen Stunde gründlicher Aufbau (ca. 4 s Flackern), das löscht Geisterbilder.
       - minutes: /15
         seconds: 0
         then:
@@ -114,6 +125,13 @@ button:
       - lambda: 'flur::drehen(1, id(aufgaben).state);'
       - script.execute: nach_eingabe
   - platform: template
+    name: "Display reinigen"
+    icon: mdi:broom
+    entity_category: config
+    on_press:
+      - lambda: 'id(voll_noetig) = true;'
+      - script.execute: zeichnen
+  - platform: template
     name: "Drücken"
     icon: mdi:gesture-tap-button
     on_press:
@@ -133,10 +151,6 @@ globals:
   - id: voll_noetig
     type: bool
     initial_value: 'true'
-  # Reinigungsdurchgang: 1 = ganz schwarz zeichnen, 2 = ganz weiss, 0 = normales Bild
-  - id: reinigung
-    type: int
-    initial_value: '0'
 
 script:
   # Knopf gedrückt: abhaken bzw. Auswahl bestätigen
@@ -161,17 +175,11 @@ script:
           condition:
             lambda: 'return id(voll_noetig);'
           then:
-            # Reinigung gegen Geisterbilder: schwarz, weiss, dann das Bild (je voller Aufbau)
+            # Gründlicher Aufbau mit normaler Wellenform (ca. 4 s Flackern), löscht Geisterbilder
             - lambda: |-
                 id(voll_noetig) = false;
-                id(epaper).set_full_update_every(1);
-                id(reinigung) = 1;
+                id(epaper).gruendlich_naechstes();
             - component.update: epaper
-            - lambda: 'id(reinigung) = 2;'
-            - component.update: epaper
-            - lambda: 'id(reinigung) = 0;'
-            - component.update: epaper
-            - lambda: 'id(epaper).set_full_update_every(30);'
           else:
             - component.update: epaper
   # Nach jeder Eingabe: sofort zeichnen, dann Zeitlimits abwarten
@@ -309,6 +317,7 @@ display:
     id: epaper
     model: 7.50inv2p
     cs_pin: GPIO5
+    data_rate: 4MHz
     dc_pin: GPIO17
     reset_pin: GPIO16
     busy_pin:
@@ -318,8 +327,6 @@ display:
     full_update_every: 30
     update_interval: never
     lambda: |-
-      if (id(reinigung) == 1) { it.fill(COLOR_ON); return; }
-      if (id(reinigung) == 2) { it.fill(COLOR_OFF); return; }
       using namespace flur;
       const int B = 800;
       const auto SCHWARZ = COLOR_ON;
