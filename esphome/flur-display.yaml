@@ -6,6 +6,17 @@ substitutions:
   # Sensor für die Innentemperatur in der Kopfzeile, in der Gerätekonfiguration überschreiben
   innen_temperatur: sensor.flur_temperatur
 
+# Angepasster Display-Treiber aus diesem Repository: sendet das Bild in einem Stück
+# statt Byte für Byte (sonst dauert jeder Schritt mehrere Sekunden)
+external_components:
+  - source:
+      type: git
+      url: https://github.com/znerolcode/ha-haushalt
+      ref: main
+      path: esphome/components
+    components: [waveshare_epaper]
+    refresh: 1d
+
 esp32:
   # Ein volles Bild an das Display zu senden dauert länger als die üblichen 5 Sekunden
   watchdog_timeout: 30s
@@ -309,6 +320,7 @@ display:
     id: epaper
     model: 7.50inv2p
     cs_pin: GPIO5
+    data_rate: 4MHz
     dc_pin: GPIO17
     reset_pin: GPIO16
     busy_pin:
