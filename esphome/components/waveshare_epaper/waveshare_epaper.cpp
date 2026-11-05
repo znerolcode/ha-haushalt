@@ -4241,6 +4241,65 @@ void WaveshareEPaper7P5InV2P::initialize() {
   this->command(0x02);
 }
 
+// flur-display: gründlicher Aufbau mit der normalen (langsamen) Wellenform statt dem Schnellmodus.
+// Entspricht dem Modell 7.50inV2, löscht Geisterbilder der Teil-Aktualisierung.
+void WaveshareEPaper7P5InV2P::gruendlich_aufbauen_() {
+  ESP_LOGI(TAG, "Gruendlicher Aufbau");
+  this->reset_();
+
+  this->command(0x01);  // Power setting
+  this->data(0x07);
+  this->data(0x07);
+  this->data(0x3f);
+  this->data(0x3f);
+  this->command(0x06);  // Booster soft start
+  this->data(0x17);
+  this->data(0x17);
+  this->data(0x28);
+  this->data(0x17);
+  this->command(0x04);  // Power on
+  delay(100);  // NOLINT
+  this->wait_until_idle_();
+  this->command(0x00);  // Panel setting
+  this->data(0x1F);
+  this->command(0x61);  // Resolution
+  this->data(0x03);
+  this->data(0x20);
+  this->data(0x01);
+  this->data(0xE0);
+  this->command(0x15);
+  this->data(0x00);
+  this->command(0x50);  // VCOM and data interval
+  this->data(0x10);
+  this->data(0x07);
+  this->command(0x60);  // TCON
+  this->data(0x22);
+  this->command(0xE0);  // Temperatur wieder intern messen -> normale Wellenform
+  this->data(0x00);
+
+  this->command(0x13);
+  delay(2);
+  this->send_buffer_(true);
+  delay(100);  // NOLINT
+  this->wait_until_idle_();
+
+  this->command(0x12);  // Refresh
+  delay(100);  // NOLINT
+  this->wait_until_idle_();
+
+  // Schnellmodus für die nächsten Aktualisierungen wieder einschalten
+  this->command(0xE0);
+  this->data(0x02);
+  this->command(0xE5);
+  this->data(0x5A);
+
+  this->command(0x02);  // Power off
+  this->wait_until_idle_();
+
+  // Nächstes Bild wieder ganz übertragen, damit der Bildspeicher stimmt
+  this->at_update_ = 0;
+}
+
 // flur-display: ganzen Puffer in einer SPI-Übertragung senden (bei Bedarf invertiert)
 void WaveshareEPaper7P5InV2P::send_buffer_(bool invertiert) {
   const uint32_t len = this->get_buffer_length_();
@@ -4260,6 +4319,12 @@ void WaveshareEPaper7P5InV2P::send_buffer_(bool invertiert) {
 
 void HOT WaveshareEPaper7P5InV2P::display() {
   uint32_t buf_len = this->get_buffer_length_();
+
+  if (this->gruendlich_) {
+    this->gruendlich_ = false;
+    this->gruendlich_aufbauen_();
+    return;
+  }
 
   // COMMAND POWER ON
   ESP_LOGI(TAG, "Power on the display and hat");

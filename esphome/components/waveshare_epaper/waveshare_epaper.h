@@ -976,6 +976,9 @@ class WaveshareEPaper7P5InV2P : public WaveshareEPaper {
 
   void set_full_update_every(uint32_t full_update_every);
 
+  // flur-display: nächste Aktualisierung als gründlicher Aufbau (normale Wellenform)
+  void gruendlich_naechstes() { this->gruendlich_ = true; }
+
  protected:
   int get_width_internal() override;
 
@@ -985,9 +988,11 @@ class WaveshareEPaper7P5InV2P : public WaveshareEPaper {
 
   uint32_t full_update_every_{30};
   uint32_t at_update_{0};
+  bool gruendlich_{false};
 
  private:
   void send_buffer_(bool invertiert);
+  void gruendlich_aufbauen_();
   void reset_();
 
   void turn_on_display_();
