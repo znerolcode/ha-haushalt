@@ -90,6 +90,7 @@ Danach geht jedes weitere Aufspielen über WLAN direkt aus ESPHome (**Install** 
 - **Drücken** fragt „Erledigt?“, **nochmals drücken** hakt ab. Drehen bricht ab.
 - Bei Aufgaben mit Staubsauger wählst du nach dem ersten Drücken die Startzeit (sofort, 5, 20, 60 Min) und bestätigst mit Drücken.
 - Ganz unten steht **+ Neue Aufgabe**. Drücken zeigt einen QR-Code, der am Handy die Haushalt-Seite in Home Assistant öffnet.
+- Ohne Drehregler geht dasselbe in Home Assistant: Das Gerät hat die Tasten **Hoch**, **Runter** und **Drücken**.
 - 10 Sekunden ohne Bedienung brechen eine offene Auswahl ab, nach 30 Sekunden verschwindet der Pfeil.
 - Ohne Bedienung aktualisiert sich das Display alle 15 Minuten und wenn sich in Home Assistant etwas ändert. Von 23 bis 6 Uhr bleibt es stehen.
 
