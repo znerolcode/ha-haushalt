@@ -97,18 +97,27 @@ binary_sensor:
       - delayed_on: 20ms
       - delayed_off: 20ms
     on_press:
-      - lambda: 'flur::druecken(id(aufgaben).state);'
-      - if:
-          condition:
-            lambda: 'return flur::senden;'
-          then:
-            - homeassistant.action:
-                action: haushalt.erledigt
-                data:
-                  aufgabe_id: !lambda 'return flur::senden_id;'
-                  start_in_min: !lambda 'return to_string(flur::senden_min);'
-            - lambda: 'flur::senden = false;'
+      - script.execute: druecken
+
+# Dieselbe Bedienung als Tasten in Home Assistant (z.B. ohne Drehregler)
+button:
+  - platform: template
+    name: "Hoch"
+    icon: mdi:chevron-up
+    on_press:
+      - lambda: 'flur::drehen(-1, id(aufgaben).state);'
       - script.execute: nach_eingabe
+  - platform: template
+    name: "Runter"
+    icon: mdi:chevron-down
+    on_press:
+      - lambda: 'flur::drehen(1, id(aufgaben).state);'
+      - script.execute: nach_eingabe
+  - platform: template
+    name: "Drücken"
+    icon: mdi:gesture-tap-button
+    on_press:
+      - script.execute: druecken
 
 switch:
   # Neuere Treiberplatinen (Rev 2.3) haben eine 9. Leitung PWR, die eingeschaltet sein muss
@@ -130,6 +139,21 @@ globals:
     initial_value: '0'
 
 script:
+  # Knopf gedrückt: abhaken bzw. Auswahl bestätigen
+  - id: druecken
+    then:
+      - lambda: 'flur::druecken(id(aufgaben).state);'
+      - if:
+          condition:
+            lambda: 'return flur::senden;'
+          then:
+            - homeassistant.action:
+                action: haushalt.erledigt
+                data:
+                  aufgabe_id: !lambda 'return flur::senden_id;'
+                  start_in_min: !lambda 'return to_string(flur::senden_min);'
+            - lambda: 'flur::senden = false;'
+      - script.execute: nach_eingabe
   # Zeichnen, bei Bedarf als voller Aufbau
   - id: zeichnen
     then:
