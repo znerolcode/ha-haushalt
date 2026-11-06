@@ -88,7 +88,9 @@ Danach geht jedes weitere Aufspielen über WLAN direkt aus ESPHome (**Install** 
 
 - **Drehen** bewegt den Pfeil durch die Liste. Passen nicht alle Aufgaben aufs Display, scrollt sie mit; unten steht, wie viele weitere es gibt.
 - **Drücken** fragt „Erledigt?“, **nochmals drücken** hakt ab. Drehen bricht ab.
-- Bei Aufgaben mit Staubsauger wählst du nach dem ersten Drücken die Startzeit (sofort, 5, 20, 60 Min) und bestätigst mit Drücken.
+- Zuoberst steht die Zeile **Staubsaugen** (nur wenn in der Haushalt-Integration ein Staubsauger gewählt ist). Drücken öffnet **Ganze Wohnung**, **Einzelne Zimmer** und **Sauger reinigen**. Danach Startzeit wählen und die Rückfrage mit **Ja** bestätigen. Bei einzelnen Zimmern erscheint der Grundriss: Drehen springt von Zimmer zu Zimmer, Drücken markiert es schwarz, nach dem letzten Zimmer kommen **Weiter** und **Zurück**.
+- Läuft oder wartet der Staubsauger, zeigt die Zeile das an. Drücken bietet dann **Pausieren**/**Fortsetzen**, **Abbrechen** (zurück zur Station) und **Zurück**.
+- Der Grundriss und die Raum-IDs stehen in `grundriss.h`. Für eine andere Wohnung dort anpassen.
 - Ganz unten steht **+ Neue Aufgabe**. Drücken zeigt einen QR-Code, der am Handy die Haushalt-Seite in Home Assistant öffnet.
 - Ohne Drehregler geht dasselbe in Home Assistant: Das Gerät hat die Tasten **Hoch**, **Runter** und **Drücken**.
 - 10 Sekunden ohne Bedienung brechen eine offene Auswahl ab, nach 30 Sekunden verschwindet der Pfeil.

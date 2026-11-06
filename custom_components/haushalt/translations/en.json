@@ -18,10 +18,16 @@
           "zeit_morgen": "Frist \"Morgen\" endet um",
           "zeit_abend": "Frist \"Abend\" endet um",
           "vorschau_tage": "Aufgaben so viele Tage im Voraus anzeigen",
-          "wetter": "Wetter fürs Display"
+          "wetter": "Wetter fürs Display",
+          "staubsauger": "Staubsauger fürs Display",
+          "reinigung_x": "Reinigungspunkt X",
+          "reinigung_y": "Reinigungspunkt Y"
         },
         "data_description": {
-          "wetter": "Optional. Daraus berechnet die Integration Vormittag und Nachmittag für heute und die nächsten 2 Tage (Sensor Display-Wetter)."
+          "wetter": "Optional. Daraus berechnet die Integration Vormittag und Nachmittag für heute und die nächsten 2 Tage (Sensor Display-Wetter).",
+          "staubsauger": "Optional. Zeigt zuoberst im Display die Zeile Staubsaugen: ganze Wohnung, einzelne Zimmer oder Sauger reinigen.",
+          "reinigung_x": "Optional. Koordinate des Punkts, an den der Sauger zum Leeren und Reinigen fährt. Auslesen mit der Aktion roborock.get_vacuum_current_position, wenn er dort steht.",
+          "reinigung_y": "Optional. Zweite Koordinate des Reinigungspunkts."
         }
       }
     }
@@ -54,11 +60,7 @@
           "title": "Intervall",
           "data": {
             "tage": "Alle wie viele Tage",
-            "zuletzt_erledigt": "Zuletzt erledigt am",
-            "staubsauger": "Staubsauger"
-          },
-          "data_description": {
-            "staubsauger": "Optional. Beim Abhaken wählst du, ob er sofort oder in 5, 20 oder 60 Minuten die ganze Wohnung saugt."
+            "zuletzt_erledigt": "Zuletzt erledigt am"
           }
         },
         "termin": {
@@ -67,13 +69,11 @@
             "frist": "Frist",
             "startdatum": "Erster Termin",
             "alle_wochen": "Wiederholen alle X Wochen (0 = nicht wiederholen)",
-            "weitere_daten": "Weitere einzelne Termine",
-            "staubsauger": "Staubsauger"
+            "weitere_daten": "Weitere einzelne Termine"
           },
           "data_description": {
             "startdatum": "Der Wochentag dieses Datums bestimmt die Wiederholung.",
-            "weitere_daten": "Optional, z.B. aus dem Abfuhrkalender: 05.11.2026, 19.11.2026",
-            "staubsauger": "Optional. Beim Abhaken wählst du, ob er sofort oder in 5, 20 oder 60 Minuten die ganze Wohnung saugt."
+            "weitere_daten": "Optional, z.B. aus dem Abfuhrkalender: 05.11.2026, 19.11.2026"
           }
         },
         "wochentag": {
@@ -83,15 +83,13 @@
             "alle_wochen": "Alle X Wochen",
             "startdatum": "Ab Datum",
             "mindestabstand": "Mindestabstand in Tagen",
-            "zuletzt_erledigt": "Zuletzt erledigt am",
-            "staubsauger": "Staubsauger"
+            "zuletzt_erledigt": "Zuletzt erledigt am"
           },
           "data_description": {
             "alle_wochen": "1 = jede Woche, 2 = jede zweite Woche usw.",
             "startdatum": "Optional. Bei \"alle 2 Wochen\" oder mehr legt die Woche dieses Datums fest, welche Wochen zählen.",
             "mindestabstand": "Ein Wochentag wird übersprungen, wenn die Aufgabe weniger als so viele Tage vorher erledigt wurde.",
-            "zuletzt_erledigt": "Optional. Leer lassen, wenn die Aufgabe ab dem nächsten passenden Wochentag gelten soll.",
-            "staubsauger": "Optional. Beim Abhaken wählst du, ob er sofort oder in 5, 20 oder 60 Minuten die ganze Wohnung saugt."
+            "zuletzt_erledigt": "Optional. Leer lassen, wenn die Aufgabe ab dem nächsten passenden Wochentag gelten soll."
           }
         }
       },
@@ -141,23 +139,11 @@
       },
       "wetter": {
         "name": "Display-Wetter"
-      },
-      "saugstart": {
-        "name": "Saugstart"
       }
     },
     "button": {
       "erledigt": {
         "name": "Erledigt"
-      },
-      "erledigt_sofort": {
-        "name": "Erledigt, sofort saugen"
-      },
-      "erledigt_start_in": {
-        "name": "Erledigt, saugen in {minuten} Min"
-      },
-      "saugstart_abbrechen": {
-        "name": "Saugstart abbrechen"
       }
     }
   },
@@ -169,10 +155,30 @@
         "aufgabe_id": {
           "name": "Aufgaben-ID",
           "description": "Die ID der Aufgabe, steht im Attribut aufgabe_id des Fälligkeits-Sensors."
+        }
+      }
+    },
+    "saugen": {
+      "name": "Staubsaugen",
+      "description": "Startet den Staubsauger aus den Einstellungen, sofort oder später.",
+      "fields": {
+        "zimmer": {
+          "name": "Zimmer",
+          "description": "Raum-IDs des Staubsaugers, z.B. 19,20. Leer = ganze Wohnung."
         },
         "start_in_min": {
-          "name": "Saugstart in Minuten",
-          "description": "Nur für Aufgaben mit Staubsauger: 0, 5, 20 oder 60. Ohne Angabe startet er sofort."
+          "name": "Start in Minuten",
+          "description": "0, 5, 20 oder 60. Ohne Angabe sofort."
+        }
+      }
+    },
+    "sauger": {
+      "name": "Staubsauger steuern",
+      "description": "Pausieren, fortsetzen, abbrechen (zurück zur Station, auch einen geplanten Start) oder zum Reinigungspunkt fahren.",
+      "fields": {
+        "aktion": {
+          "name": "Aktion",
+          "description": "pausieren, fortsetzen, abbrechen oder reinigen."
         }
       }
     }
@@ -180,6 +186,12 @@
   "exceptions": {
     "unbekannte_aufgabe": {
       "message": "Unbekannte Aufgabe: {aufgabe_id}"
+    },
+    "kein_staubsauger": {
+      "message": "In den Haushalt-Einstellungen ist kein Staubsauger gewählt."
+    },
+    "kein_reinigungspunkt": {
+      "message": "In den Haushalt-Einstellungen ist kein Reinigungspunkt eingetragen."
     }
   }
 }

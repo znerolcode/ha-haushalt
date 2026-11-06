@@ -25,7 +25,6 @@ CONF_FRIST = "frist"
 CONF_STARTDATUM = "startdatum"
 CONF_ALLE_WOCHEN = "alle_wochen"
 CONF_DATEN = "weitere_daten"
-CONF_STAUBSAUGER = "staubsauger"
 CONF_WOCHENTAGE = "wochentage"
 CONF_MINDESTABSTAND = "mindestabstand"
 
@@ -37,6 +36,9 @@ CONF_ZEIT_MORGEN = "zeit_morgen"
 CONF_ZEIT_ABEND = "zeit_abend"
 CONF_VORSCHAU = "vorschau_tage"
 CONF_WETTER = "wetter"
+CONF_STAUBSAUGER = "staubsauger"
+CONF_REINIGUNG_X = "reinigung_x"
+CONF_REINIGUNG_Y = "reinigung_y"
 
 DEFAULT_ZEIT_MORGEN = "09:00:00"
 DEFAULT_ZEIT_ABEND = "23:59:00"
@@ -46,7 +48,13 @@ SERVICE_ERLEDIGT = "erledigt"
 ATTR_AUFGABE_ID = "aufgabe_id"
 ATTR_START_IN_MIN = "start_in_min"
 
-# Startzeit-Auswahl für Aufgaben mit Staubsauger, in Minuten
+SERVICE_SAUGEN = "saugen"
+SERVICE_SAUGER = "sauger"
+ATTR_ZIMMER = "zimmer"
+ATTR_AKTION = "aktion"
+AKTIONEN = ["pausieren", "fortsetzen", "abbrechen", "reinigen"]
+
+# Startzeit-Auswahl fürs Staubsaugen, in Minuten
 START_OPTIONEN = [0, 5, 20, 60]
 # Ein verpasster Saugstart (z.B. HA war aus) wird nur so lange nachgeholt
 NACHHOLEN_MAX_MIN = 15
