@@ -46,7 +46,7 @@ def test_vormittag_haeufigster_zustand_max_temp_und_regen():
     ]
     h = haelfte_aus_stunden(stunden, TAG, VORMITTAG, ZONE)
     # sunny 3x (inkl. klarer Nacht), cloudy 2x
-    assert h == Haelfte("sunny", 10, "40 %", "")
+    assert h == Haelfte("sunny", 10, "40 %", "", tiefst=4)
 
 
 def test_gleichstand_nimmt_das_schlechtere_wetter():
@@ -70,8 +70,8 @@ def test_nur_menge_und_null_mm():
 
 def test_sechsstuendliche_eintraege():
     stunden = [stunde(6, "cloudy", 5, 20), stunde(12, "rainy", 9, 70)]
-    assert haelfte_aus_stunden(stunden, TAG, VORMITTAG, ZONE) == Haelfte("cloudy", 5, "20 %")
-    assert haelfte_aus_stunden(stunden, TAG, NACHMITTAG, ZONE) == Haelfte("rainy", 9, "70 %")
+    assert haelfte_aus_stunden(stunden, TAG, VORMITTAG, ZONE) == Haelfte("cloudy", 5, "20 %", tiefst=5)
+    assert haelfte_aus_stunden(stunden, TAG, NACHMITTAG, ZONE) == Haelfte("rainy", 9, "70 %", tiefst=9)
 
 
 def test_keine_daten():
@@ -79,15 +79,16 @@ def test_keine_daten():
 
 
 def test_tagesvorhersage_als_ersatz():
-    tage = [{"datetime": "2026-10-27T11:00:00+00:00", "condition": "snowy", "temperature": 2.4}]
-    assert haelfte_aus_tag(tage, TAG, ZONE) == Haelfte("snowy", 2, "")
+    tage = [{"datetime": "2026-10-27T11:00:00+00:00", "condition": "snowy", "temperature": 2.4,
+             "templow": -3.2}]
+    assert haelfte_aus_tag(tage, TAG, ZONE) == Haelfte("snowy", 2, "", tiefst=-3)
     assert haelfte_aus_tag(tage, TAG + timedelta(days=1), ZONE) is None
 
 
 def test_anzeige_zeile():
     assert (
-        anzeige_zeile("Heute", Haelfte("sunny", 8, "0 %", "0,5 mm"), None)
-        == "Heute|sunny|8|0 %|0,5 mm||||"
+        anzeige_zeile("Heute", Haelfte("sunny", 8, "0 %", "0,5 mm", tiefst=3), None)
+        == "Heute|sunny|8|0 %|0,5 mm|||||3|"
     )
 
 
@@ -144,7 +145,7 @@ async def test_sensor(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactory
     # START ist Montag 12:00: Vorhersage ab jetzt, also kein stündlicher Vormittag
     zeilen = zustand.attributes["anzeige"].splitlines()
     assert len(zeilen) == 3
-    assert zeilen[0] == "Heute|cloudy|15|||rainy|11|50 %|"
+    assert zeilen[0] == "Heute|cloudy|15|||rainy|11|50 %||5|10"
     assert zeilen[1].startswith("Dienstag|sunny|")
     assert zeilen[2].startswith("Mittwoch|")
     assert zustand.state == "rainy"

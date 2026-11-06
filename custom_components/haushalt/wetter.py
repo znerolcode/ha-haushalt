@@ -45,9 +45,10 @@ class Haelfte:
     """Zusammenfassung eines halben Tages."""
 
     zustand: str
-    temperatur: int | None
+    temperatur: int | None  # höchste Temperatur
     regen: str  # Wahrscheinlichkeit, z.B. "40 %"; leer, wenn unbekannt
     menge: str = ""  # Regenmenge, z.B. "1,2 mm"; leer, wenn unbekannt oder 0
+    tiefst: int | None = None  # tiefste Temperatur
 
 
 def _zustand(werte: list[str]) -> str:
@@ -112,6 +113,7 @@ def haelfte_aus_stunden(
         temperatur=round(max(temperaturen)) if temperaturen else None,
         regen=_regen(passend),
         menge=_menge(passend),
+        tiefst=round(min(temperaturen)) if temperaturen else None,
     )
 
 
@@ -123,11 +125,13 @@ def haelfte_aus_tag(
         zeit = _lokal(eintrag, zone)
         if zeit is not None and zeit.date() == tag:
             temperatur = eintrag.get("temperature")
+            tief = eintrag.get("templow")
             return Haelfte(
                 zustand=_zustand([eintrag.get("condition") or ""]),
                 temperatur=round(temperatur) if temperatur is not None else None,
                 regen=_regen([eintrag]),
                 menge=_menge([eintrag]),
+                tiefst=round(tief) if tief is not None else None,
             )
     return None
 
@@ -139,15 +143,22 @@ def tag_name(tag: date, heute: date) -> str:
 
 
 def anzeige_zeile(name: str, vm: Haelfte | None, nm: Haelfte | None) -> str:
-    """name|zustand|temp|regen|menge|zustand|temp|regen|menge, unbekannte Felder leer."""
+    """name|zustand|max|regen|menge|zustand|max|regen|menge|min|min, unbekannte Felder leer.
+
+    Die Tiefstwerte (Vormittag, Nachmittag) stehen hinten, damit ältere Display-Firmware
+    die Zeile weiter versteht.
+    """
     felder = [name]
+    tief = []
     for h in (vm, nm):
         if h is None:
             felder += ["", "", "", ""]
+            tief.append("")
         else:
             temp = "" if h.temperatur is None else str(h.temperatur)
             felder += [h.zustand, temp, h.regen, h.menge]
-    return "|".join(felder)
+            tief.append("" if h.tiefst is None else str(h.tiefst))
+    return "|".join(felder + tief)
 
 
 class WetterDienst:
