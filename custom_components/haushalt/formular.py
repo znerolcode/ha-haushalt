@@ -18,25 +18,24 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.util import dt as dt_util
 
+from .config_flow import aufgabe_daten, termin_pruefen
 from .const import (
-    CONF_ALLE_WOCHEN,
+    CONF_ANZAHL,
     CONF_DATEN,
+    CONF_EINHEIT,
     CONF_FRIST,
     CONF_MINDESTABSTAND,
     CONF_STARTDATUM,
-    CONF_TAGE,
-    CONF_TYP,
     CONF_WOCHENTAGE,
     CONF_ZULETZT,
     DEFAULT_MINDESTABSTAND,
     DOMAIN,
+    EINHEIT_WOCHEN,
     FRIST_ABEND,
     SUBENTRY_AUFGABE,
     TYP_INTERVALL,
-    TYP_WOCHENTAG,
-    WOCHENTAGE,
+    VERPASST_STEHEN,
 )
-from .logic import parse_daten
 
 if TYPE_CHECKING:
     from . import HaushaltManager
@@ -52,10 +51,11 @@ class Formular:
 
     name: str = ""
     typ: str = TYP_INTERVALL
-    tage: int = 7
+    verpasst: str = VERPASST_STEHEN
+    anzahl: int = 1
+    einheit: str = EINHEIT_WOCHEN
     zuletzt: date | None = None
     wochentage: set[str] = field(default_factory=set)
-    alle_wochen: int = 1
     mindestabstand: int = DEFAULT_MINDESTABSTAND
     datum: date | None = None
     frist: str = FRIST_ABEND
@@ -66,37 +66,25 @@ class Formular:
         name = self.name.strip()
         if not name:
             raise _fehler("kein_name")
-        if self.typ == TYP_INTERVALL:
-            zuletzt = self.zuletzt or dt_util.now().date()
-            return name, {
-                CONF_TYP: self.typ,
-                CONF_TAGE: int(self.tage),
-                CONF_ZULETZT: zuletzt.isoformat(),
-            }
-        start = self.datum.isoformat() if self.datum else None
-        if self.typ == TYP_WOCHENTAG:
-            if not self.wochentage:
-                raise _fehler("kein_wochentag")
-            return name, {
-                CONF_TYP: self.typ,
-                CONF_WOCHENTAGE: [t for t in WOCHENTAGE if t in self.wochentage],
-                CONF_ALLE_WOCHEN: max(1, int(self.alle_wochen)),
-                CONF_STARTDATUM: start,
-                CONF_MINDESTABSTAND: int(self.mindestabstand),
-            }
-        try:
-            einzelne = parse_daten(self.weitere)
-        except ValueError as err:
-            raise _fehler("ungueltige_daten") from err
-        if not einzelne and not start:
-            raise _fehler("kein_termin")
-        return name, {
-            CONF_TYP: self.typ,
+        eingabe: dict[str, Any] = {
+            CONF_ANZAHL: self.anzahl,
+            CONF_EINHEIT: self.einheit,
             CONF_FRIST: self.frist,
-            CONF_STARTDATUM: start,
-            CONF_ALLE_WOCHEN: int(self.alle_wochen),
-            CONF_DATEN: self.weitere.strip(),
         }
+        if self.typ == TYP_INTERVALL:
+            eingabe[CONF_ZULETZT] = (self.zuletzt or dt_util.now().date()).isoformat()
+        else:
+            eingabe.update(
+                {
+                    CONF_STARTDATUM: self.datum.isoformat() if self.datum else None,
+                    CONF_WOCHENTAGE: list(self.wochentage),
+                    CONF_DATEN: self.weitere,
+                    CONF_MINDESTABSTAND: self.mindestabstand,
+                }
+            )
+            if fehler := termin_pruefen(eingabe):
+                raise _fehler(next(iter(fehler.values())))
+        return name, aufgabe_daten(self.typ, self.verpasst, eingabe)
 
 
 def _fehler(schluessel: str) -> ServiceValidationError:

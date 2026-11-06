@@ -31,7 +31,9 @@ async def anlegen(hass):
 
 async def test_felder_vorhanden(hass: HomeAssistant, entry):  # noqa: F811
     assert hass.states.get("select.neue_aufgabe_typ").state == "intervall"
-    assert hass.states.get("number.neue_aufgabe_tage").state == "7"
+    assert hass.states.get("number.neue_aufgabe_anzahl").state == "1"
+    assert hass.states.get("select.neue_aufgabe_einheit").state == "wochen"
+    assert hass.states.get("select.neue_aufgabe_verpasst").state == "stehen"
     assert hass.states.get("date.neue_aufgabe_zuletzt").state == "2026-10-26"
     assert hass.states.get("date.neue_aufgabe_datum").state == "unknown"
     assert hass.states.get("switch.neue_aufgabe_mo").state == "off"
@@ -41,46 +43,50 @@ async def test_felder_vorhanden(hass: HomeAssistant, entry):  # noqa: F811
 
 async def test_intervall(hass: HomeAssistant, entry):  # noqa: F811
     await setzen(hass, "text", "name", value="Bettwäsche")
-    await setzen(hass, "number", "tage", value=14)
+    await setzen(hass, "number", "anzahl", value=2)
     await setzen(hass, "date", "zuletzt", date="2026-10-16")
     await anlegen(hass)
 
     bett, sub = sensor_id(hass, entry, "Bettwäsche")
-    assert sub.data == {"typ": "intervall", "tage": 14, "zuletzt_erledigt": "2026-10-16"}
+    assert sub.data == {
+        "typ": "intervall", "verpasst": "stehen", "anzahl": 2, "einheit": "wochen",
+        "frist": "abend", "zuletzt_erledigt": "2026-10-16",
+    }
     assert hass.states.get(bett).state == "in 4 Tagen"
     assert hass.states.get("sensor.neue_aufgabe_meldung").state == "Bettwäsche"
     # Formular ist danach wieder leer
     assert hass.states.get("text.neue_aufgabe_name").state == ""
-    assert hass.states.get("number.neue_aufgabe_tage").state == "7"
+    assert hass.states.get("number.neue_aufgabe_anzahl").state == "1"
+    assert hass.states.get("select.neue_aufgabe_einheit").state == "wochen"
+    assert hass.states.get("select.neue_aufgabe_verpasst").state == "stehen"
 
 
 async def test_wochentag(hass: HomeAssistant, entry):  # noqa: F811
     await setzen(hass, "text", "name", value="Pflanzen giessen")
-    await setzen(hass, "select", "typ", option="wochentag")
+    await setzen(hass, "select", "typ", option="termin")
     with pytest.raises(ServiceValidationError):
         await anlegen(hass)
     for tag in ("do", "mo"):
         await hass.services.async_call(
             "switch", "turn_on", {"entity_id": f"switch.neue_aufgabe_{tag}"}, blocking=True
         )
-    await setzen(hass, "number", "alle_wochen", value=2)
+    await setzen(hass, "number", "anzahl", value=2)
     await anlegen(hass)
     pflanzen, sub = sensor_id(hass, entry, "Pflanzen giessen")
     # Nach dem Neuladen läuft die Integration weiter (Plattform date.py vs. datetime.date)
     assert hass.states.get(pflanzen).state == "heute"
     assert sub.data == {
-        "typ": "wochentag",
-        "wochentage": ["mo", "do"],
-        "alle_wochen": 2,
-        "startdatum": None,
-        "mindestabstand": 3,
+        "typ": "termin", "verpasst": "stehen", "anzahl": 2, "einheit": "wochen",
+        "frist": "abend", "startdatum": None, "wochentage": ["mo", "do"],
+        "weitere_daten": "", "mindestabstand": 3,
     }
 
 
 async def test_termin(hass: HomeAssistant, entry):  # noqa: F811
     await setzen(hass, "text", "name", value="Altkarton")
     await setzen(hass, "select", "typ", option="termin")
-    await setzen(hass, "number", "alle_wochen", value=0)
+    await setzen(hass, "select", "verpasst", option="weg")
+    await setzen(hass, "number", "anzahl", value=0)
     with pytest.raises(ServiceValidationError):
         await anlegen(hass)
     await setzen(hass, "text", "weitere", value="5.11.2026, 32.11.2026")
@@ -91,7 +97,7 @@ async def test_termin(hass: HomeAssistant, entry):  # noqa: F811
     await anlegen(hass)
     karton, sub = sensor_id(hass, entry, "Altkarton")
     assert sub.data["frist"] == "morgen"
-    assert sub.data["alle_wochen"] == 0
+    assert sub.data["anzahl"] == 0
     assert hass.states.get(karton).state == "bis morgen früh"
 
 

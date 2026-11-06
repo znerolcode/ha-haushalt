@@ -43,60 +43,64 @@
           "title": "Neue Aufgabe",
           "data": {
             "name": "Name",
-            "typ": "Typ"
+            "typ": "Typ",
+            "verpasst": "Wenn verpasst"
           },
           "data_description": {
-            "typ": "Intervall: alle X Tage, gezählt ab dem letzten Abhaken. Wochentag: an festen Wochentagen fällig, bleibt überfällig bis erledigt. Termin: muss bis zu einem bestimmten Tag erledigt sein und verschwindet, wenn die Frist verpasst ist."
+            "typ": "Intervall: alle X Tage, Wochen oder Monate, gezählt ab dem letzten Abhaken (z.B. Bettwäsche alle 2 Wochen). Fester Termin: an festen Tagen ab einem Startdatum (z.B. Altkarton jeden 2. Dienstag, Pflanzen giessen Mo und Do).",
+            "verpasst": "Bleibt überfällig stehen: erscheint als überfällig, bis sie erledigt ist. Verschwindet: ist die Frist am Fälligkeitstag vorbei, fällt die Aufgabe weg und kommt beim nächsten Mal wieder."
           }
         },
         "reconfigure_typ": {
           "title": "Aufgabe bearbeiten",
           "data": {
             "name": "Name",
-            "typ": "Typ"
+            "typ": "Typ",
+            "verpasst": "Wenn verpasst"
+          },
+          "data_description": {
+            "typ": "Intervall: alle X Tage, Wochen oder Monate, gezählt ab dem letzten Abhaken (z.B. Bettwäsche alle 2 Wochen). Fester Termin: an festen Tagen ab einem Startdatum (z.B. Altkarton jeden 2. Dienstag, Pflanzen giessen Mo und Do).",
+            "verpasst": "Bleibt überfällig stehen: erscheint als überfällig, bis sie erledigt ist. Verschwindet: ist die Frist am Fälligkeitstag vorbei, fällt die Aufgabe weg und kommt beim nächsten Mal wieder."
           }
         },
         "intervall": {
           "title": "Intervall",
           "data": {
-            "tage": "Alle wie viele Tage",
+            "anzahl": "Alle",
+            "einheit": "Einheit",
+            "frist": "Frist",
             "zuletzt_erledigt": "Zuletzt erledigt am"
+          },
+          "data_description": {
+            "anzahl": "Zahl, z.B. 2 für alle 2 Wochen.",
+            "frist": "Bis wann am Fälligkeitstag. Danach verschwindet die Aufgabe."
           }
         },
         "termin": {
-          "title": "Termin",
+          "title": "Fester Termin",
           "data": {
-            "frist": "Frist",
             "startdatum": "Erster Termin",
-            "alle_wochen": "Wiederholen alle X Wochen (0 = nicht wiederholen)",
-            "weitere_daten": "Weitere einzelne Termine"
-          },
-          "data_description": {
-            "startdatum": "Der Wochentag dieses Datums bestimmt die Wiederholung.",
-            "weitere_daten": "Optional, z.B. aus dem Abfuhrkalender: 05.11.2026, 19.11.2026"
-          }
-        },
-        "wochentag": {
-          "title": "Wochentag",
-          "data": {
+            "anzahl": "Wiederholen alle",
+            "einheit": "Einheit",
             "wochentage": "An diesen Wochentagen",
-            "alle_wochen": "Alle X Wochen",
-            "startdatum": "Ab Datum",
+            "weitere_daten": "Weitere einzelne Termine",
+            "frist": "Frist",
             "mindestabstand": "Mindestabstand in Tagen",
             "zuletzt_erledigt": "Zuletzt erledigt am"
           },
           "data_description": {
-            "alle_wochen": "1 = jede Woche, 2 = jede zweite Woche usw.",
-            "startdatum": "Optional. Bei \"alle 2 Wochen\" oder mehr legt die Woche dieses Datums fest, welche Wochen zählen.",
-            "mindestabstand": "Ein Wochentag wird übersprungen, wenn die Aufgabe weniger als so viele Tage vorher erledigt wurde.",
-            "zuletzt_erledigt": "Optional. Leer lassen, wenn die Aufgabe ab dem nächsten passenden Wochentag gelten soll."
+            "anzahl": "0 = nicht wiederholen. Bei Monaten immer am gleichen Datum (31. wird in kürzeren Monaten zum Monatsletzten).",
+            "wochentage": "Nur bei Einheit Wochen. Leer = Wochentag des ersten Termins.",
+            "weitere_daten": "Optional, z.B. aus dem Abfuhrkalender: 05.11.2026, 19.11.2026",
+            "frist": "Bis wann am Termintag. Danach verschwindet die Aufgabe.",
+            "mindestabstand": "Ein Termin wird übersprungen, wenn die Aufgabe weniger als so viele Tage vorher erledigt wurde.",
+            "zuletzt_erledigt": "Optional. Leer lassen, wenn die Aufgabe ab dem nächsten Termin gelten soll."
           }
         }
       },
       "error": {
         "ungueltige_daten": "Bitte Daten im Format TT.MM.JJJJ eingeben, getrennt durch Kommas.",
-        "kein_termin": "Bitte einen ersten Termin oder einzelne Termine angeben.",
-        "kein_wochentag": "Bitte mindestens einen Wochentag wählen."
+        "kein_termin": "Bitte einen ersten Termin, Wochentage oder einzelne Termine angeben."
       },
       "abort": {
         "reconfigure_successful": "Aufgabe gespeichert."
@@ -106,9 +110,8 @@
   "selector": {
     "typ": {
       "options": {
-        "intervall": "Intervall (z.B. Bettwäsche alle 14 Tage)",
-        "termin": "Termin (z.B. Altkarton bis Dienstagmorgen)",
-        "wochentag": "Wochentag (z.B. Bad putzen jeden Samstag)"
+        "intervall": "Intervall (ab dem letzten Abhaken)",
+        "termin": "Fester Termin (an festen Tagen)"
       }
     },
     "frist": {
@@ -126,6 +129,19 @@
         "fr": "Freitag",
         "sa": "Samstag",
         "so": "Sonntag"
+      }
+    },
+    "verpasst": {
+      "options": {
+        "stehen": "Bleibt überfällig stehen",
+        "weg": "Verschwindet"
+      }
+    },
+    "einheit": {
+      "options": {
+        "tage": "Tage",
+        "wochen": "Wochen",
+        "monate": "Monate"
       }
     }
   },
@@ -165,8 +181,7 @@
         "name": "Typ",
         "state": {
           "intervall": "Intervall",
-          "wochentag": "Wochentag",
-          "termin": "Termin"
+          "termin": "Fester Termin"
         }
       },
       "neue_aufgabe_frist": {
@@ -175,17 +190,29 @@
           "morgen": "Morgen",
           "abend": "Abend"
         }
+      },
+      "neue_aufgabe_verpasst": {
+        "name": "Wenn verpasst",
+        "state": {
+          "stehen": "Bleibt überfällig stehen",
+          "weg": "Verschwindet"
+        }
+      },
+      "neue_aufgabe_einheit": {
+        "name": "Einheit",
+        "state": {
+          "tage": "Tage",
+          "wochen": "Wochen",
+          "monate": "Monate"
+        }
       }
     },
     "number": {
-      "neue_aufgabe_tage": {
-        "name": "Alle wie viele Tage"
-      },
-      "neue_aufgabe_alle_wochen": {
-        "name": "Alle X Wochen"
-      },
       "neue_aufgabe_mindestabstand": {
         "name": "Mindestabstand in Tagen"
+      },
+      "neue_aufgabe_anzahl": {
+        "name": "Alle"
       }
     },
     "switch": {
@@ -213,7 +240,7 @@
     },
     "date": {
       "neue_aufgabe_datum": {
-        "name": "Ab Datum"
+        "name": "Erster Termin"
       },
       "neue_aufgabe_zuletzt": {
         "name": "Zuletzt erledigt am"
@@ -269,14 +296,11 @@
     "kein_name": {
       "message": "Bitte einen Namen eingeben."
     },
-    "kein_wochentag": {
-      "message": "Bitte mindestens einen Wochentag wählen."
-    },
     "ungueltige_daten": {
       "message": "Die weiteren Termine bitte als TT.MM.JJJJ, mit Komma getrennt."
     },
     "kein_termin": {
-      "message": "Bitte einen ersten Termin oder weitere einzelne Termine angeben."
+      "message": "Bitte einen ersten Termin, Wochentage oder einzelne Termine angeben."
     }
   }
 }

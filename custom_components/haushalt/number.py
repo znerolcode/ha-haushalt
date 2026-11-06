@@ -18,8 +18,7 @@ async def async_setup_entry(
     manager = entry.runtime_data
     async_add_entities(
         [
-            FormularZahl(manager, "tage", "mdi:calendar-refresh", 1, 365),
-            FormularZahl(manager, "alle_wochen", "mdi:calendar-week", 0, 52),
+            FormularZahl(manager, "anzahl", "mdi:calendar-refresh", 0, 365),
             FormularZahl(manager, "mindestabstand", "mdi:arrow-expand-horizontal", 0, 60),
         ]
     )

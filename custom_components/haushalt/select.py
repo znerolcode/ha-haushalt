@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import HaushaltConfigEntry
-from .const import FRIST_ABEND, FRIST_MORGEN, TYP_INTERVALL, TYP_TERMIN, TYP_WOCHENTAG
+from .const import EINHEITEN, FRIST_ABEND, FRIST_MORGEN, TYPEN, VERPASST
 from .formular import FormularEntity
 
 
@@ -19,10 +19,9 @@ async def async_setup_entry(
     manager = entry.runtime_data
     async_add_entities(
         [
-            FormularAuswahl(
-                manager, "typ", "mdi:shape-outline",
-                [TYP_INTERVALL, TYP_WOCHENTAG, TYP_TERMIN],
-            ),
+            FormularAuswahl(manager, "typ", "mdi:shape-outline", TYPEN),
+            FormularAuswahl(manager, "verpasst", "mdi:calendar-alert", VERPASST),
+            FormularAuswahl(manager, "einheit", "mdi:timer-sand", EINHEITEN),
             FormularAuswahl(
                 manager, "frist", "mdi:clock-outline", [FRIST_MORGEN, FRIST_ABEND]
             ),
