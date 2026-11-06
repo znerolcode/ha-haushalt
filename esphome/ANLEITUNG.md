@@ -95,6 +95,7 @@ Danach geht jedes weitere Aufspielen über WLAN direkt aus ESPHome (**Install** 
 - Ohne Drehregler geht dasselbe in Home Assistant: Das Gerät hat die Tasten **Hoch**, **Runter** und **Drücken**.
 - 10 Sekunden ohne Bedienung brechen eine offene Auswahl ab, nach 30 Sekunden verschwindet der Pfeil.
 - Ohne Bedienung aktualisiert sich das Display alle 5 Minuten und wenn sich in Home Assistant etwas ändert, jeweils gründlich (ca. 4 s Flackern, voller Kontrast). Beim Drehen geht es schnell, dafür etwas blasser; 30 Sekunden nach der letzten Bedienung wird wieder gründlich gezeichnet. Von 23 bis 6 Uhr bleibt es stehen.
+- Wie kräftig das Bild beim Drehen ist, stellst du in Home Assistant beim Gerät unter **Konfiguration → Kontrast beim Drehen** ein: 0 = schnell und blass, 10 = kräftig, aber träger. Am besten Regler verschieben, am Knopf drehen und vergleichen. Die Stufe bleibt nach einem Neustart erhalten.
 
 ## Wenn etwas nicht stimmt
 
