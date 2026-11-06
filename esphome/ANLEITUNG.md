@@ -88,7 +88,7 @@ Danach geht jedes weitere Aufspielen über WLAN direkt aus ESPHome (**Install** 
 
 - **Drehen** bewegt den Pfeil durch die Liste. Passen nicht alle Aufgaben aufs Display, scrollt sie mit; unten steht, wie viele weitere es gibt.
 - **Drücken** fragt „Erledigt?“, **nochmals drücken** hakt ab. Drehen bricht ab.
-- Zuoberst steht die Zeile **Staubsaugen** (nur wenn in der Haushalt-Integration ein Staubsauger gewählt ist). Drücken öffnet **Ganze Wohnung**, **Einzelne Zimmer** und **Sauger reinigen**. Danach Startzeit wählen und die Rückfrage mit **Ja** bestätigen. Bei einzelnen Zimmern erscheint der Grundriss: Drehen springt von Zimmer zu Zimmer, Drücken markiert es schwarz, nach dem letzten Zimmer kommen **Weiter** und **Zurück**.
+- Zuoberst steht die Zeile **Staubsaugen** (nur wenn in der Haushalt-Integration ein Staubsauger gewählt ist). Drücken öffnet **Ganze Wohnung**, **Einzelne Zimmer** und **Sauger reinigen**. Danach Startzeit wählen und die Rückfrage mit **Ja** bestätigen. Bei einzelnen Zimmern erscheint der Grundriss: Drehen springt von Zimmer zu Zimmer, Drücken markiert es schwarz, nach dem letzten Zimmer kommen **Weiter** und **Zurück**, dann wieder das erste Zimmer.
 - Läuft oder wartet der Staubsauger, zeigt die Zeile das an. Drücken bietet dann **Pausieren**/**Fortsetzen**, **Abbrechen** (zurück zur Station) und **Zurück**.
 - Der Grundriss und die Raum-IDs stehen in `grundriss.h`. Für eine andere Wohnung dort anpassen.
 - Ganz unten steht **+ Neue Aufgabe**. Drücken zeigt einen QR-Code, der am Handy die Haushalt-Seite in Home Assistant öffnet.

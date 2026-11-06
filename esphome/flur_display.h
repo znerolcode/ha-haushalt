@@ -209,7 +209,8 @@ inline void drehen(int richtung, const std::string &roh) {
     }
     case ZIMMER:
       zimmer_hinweis = false;
-      zimmer_cursor = std::max(0, std::min(ANZAHL_ZIMMER + 1, zimmer_cursor + richtung));
+      // Läuft im Kreis: nach Zurück wieder das erste Zimmer
+      zimmer_cursor = (zimmer_cursor + richtung + ANZAHL_ZIMMER + 2) % (ANZAHL_ZIMMER + 2);
       return;
     case SAUG_ZEIT:
       auswahl = std::max(0, std::min(ANZAHL_OPTIONEN - 1, auswahl + richtung));

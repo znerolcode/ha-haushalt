@@ -490,15 +490,14 @@ display:
       // ---- Spalten ----
       const int LINKS_B = 470;
       it.filled_rectangle(LINKS_B, 59, 3, 480 - 59, SCHWARZ);
-      it.print(20, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "AUFGABEN");
       it.print(LINKS_B + 21, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "VORMITTAG");
       it.print(LINKS_B + 21 + (800 - 18 - LINKS_B - 21) / 2 + 6, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "NACHMITTAG");
 
-      // ---- Staubsauger-Zeile, immer zuoberst ----
-      int liste_y = 96;
-      int liste_h = 332;
+      // ---- Staubsauger-Zeile, immer zuoberst; darunter die Überschrift AUFGABEN ----
+      int oben_y = 70;
       const int ZB = LINKS_B - 36;  // Breite der Zeilen
       if (!sauger_roh.empty()) {
+        int liste_y = oben_y;
         auto s = sauger_lesen();
         bool gew = cursor == 0;  // die Zeile ist immer der erste Eintrag
         bool aktiv = s.zustand != "bereit";
@@ -510,24 +509,24 @@ display:
         else if (s.zustand == "reinigen") { titel = "Staubsauger zum Leeren und Reinigen"; unter = "Fertig? Drücken, dann Zur Station"; }
         else if (s.zustand == "steht") { titel = "Staubsauger steht"; unter = "nicht in der Station"; }
         else if (s.zustand == "fehler") { titel = "Staubsauger: Störung"; unter = "Details in der Roborock-App"; }
-        else { titel = "Staubsaugen"; unter = "Ganze Wohnung · Zimmer · Sauger reinigen"; }
+        else { titel = "Staubsaugen"; }
         auto farbe = aktiv ? WEISS : SCHWARZ;
+        // Ruhig: eine Zeile wie eine Aufgabe; aktiv: schwarz, mit Untertitel
+        const int zh = aktiv ? 46 : 38;
         if (aktiv) {
-          it.filled_rectangle(20, liste_y, ZB, 46, SCHWARZ);
+          it.filled_rectangle(20, liste_y, ZB, zh, SCHWARZ);
           if (gew) {
-            it.rectangle(22, liste_y + 2, ZB - 4, 42, WEISS);
-            it.rectangle(23, liste_y + 3, ZB - 6, 40, WEISS);
+            it.rectangle(22, liste_y + 2, ZB - 4, zh - 4, WEISS);
+            it.rectangle(23, liste_y + 3, ZB - 6, zh - 6, WEISS);
           }
-        } else if (gew) {
-          rahmen(20, liste_y, ZB, 46);
+          it.print(32, liste_y + 4, id(f_hinweis), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_hinweis), titel, ZB - 24).c_str());
+          it.print(32, liste_y + 26, id(f_klein), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_klein), unter, ZB - 24).c_str());
         } else {
-          it.rectangle(20, liste_y, ZB, 46, SCHWARZ);
+          if (gew) rahmen(20, liste_y, ZB, zh);
+          else it.rectangle(20, liste_y, ZB, zh, SCHWARZ);
+          it.print(32, liste_y + zh / 2, id(f_zeile), farbe, TextAlign::CENTER_LEFT, titel.c_str());
         }
-        it.print(32, liste_y + 23, id(f_symbol), farbe, TextAlign::CENTER_LEFT, "\U000F070D");
-        it.print(78, liste_y + 4, id(f_hinweis), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_hinweis), titel, ZB - 70).c_str());
-        it.print(78, liste_y + 26, id(f_klein), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_klein), unter, ZB - 70).c_str());
-        liste_y += 52;
-        liste_h -= 52;
+        liste_y += zh + 6;
 
         // Menü direkt unter der Zeile
         if (gew && saug_modus()) {
@@ -575,9 +574,12 @@ display:
             it.print(32, my + 72, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
           }
           liste_y += mh + 6;
-          liste_h -= mh + 6;
         }
+        oben_y = liste_y + 8;
       }
+      it.print(20, oben_y, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "AUFGABEN");
+      int liste_y = oben_y + 26;
+      int liste_h = 428 - liste_y;
 
       if (!id(aufgaben).has_state()) {
         it.print(28, liste_y + 10, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, "Warte auf Home Assistant …");
