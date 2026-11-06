@@ -37,4 +37,4 @@ packages:
     url: https://github.com/znerolcode/ha-haushalt
     ref: main
     files: [esphome/flur-display.yaml]
-    refresh: 1d
+    refresh: 0s

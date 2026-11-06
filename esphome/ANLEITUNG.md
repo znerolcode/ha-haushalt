@@ -62,13 +62,13 @@ packages:
     url: https://github.com/znerolcode/ha-haushalt
     ref: main
     files: [esphome/flur-display.yaml]
-    refresh: 1d
+    refresh: 0s
 ```
 
 4. Bei `innen_temperatur` die Entität deines Temperatursensors eintragen (in HA unter Einstellungen → Entitäten zu finden).
 5. **Save**.
 
-ESPHome holt die eigentliche Firmware aus diesem Repository. Verbesserungen kommen so mit dem nächsten Aufspielen automatisch dazu.
+ESPHome holt die eigentliche Firmware aus diesem Repository. Mit `refresh: 0s` lädt es bei jedem Aufspielen den neusten Stand, Verbesserungen kommen so automatisch dazu.
 
 ### 2. Das erste Mal per USB aufspielen
 

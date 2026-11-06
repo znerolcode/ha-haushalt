@@ -19,7 +19,7 @@ external_components:
       ref: main
       path: esphome/components
     components: [waveshare_epaper]
-    refresh: 1d
+    refresh: 0s
 
 esp32:
   # Ein volles Bild an das Display zu senden dauert länger als die üblichen 5 Sekunden
