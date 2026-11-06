@@ -94,7 +94,7 @@ Danach geht jedes weitere Aufspielen über WLAN direkt aus ESPHome (**Install** 
 - Ganz unten steht **+ Neue Aufgabe**. Drücken zeigt einen QR-Code, der am Handy das Dashboard „Neue Aufgabe“ öffnet (Einrichtung siehe README, Abschnitt „Aufgaben ohne Administratorrechte anlegen“). Die Adresse steht in der Gerätekonfiguration unter `substitutions:` als `neue_aufgabe_url`. Ohne Eintrag öffnet der QR-Code die Haushalt-Seite in HA, die nur Administratoren bedienen können.
 - Ohne Drehregler geht dasselbe in Home Assistant: Das Gerät hat die Tasten **Hoch**, **Runter** und **Drücken**.
 - 10 Sekunden ohne Bedienung brechen eine offene Auswahl ab, nach 30 Sekunden verschwindet der Pfeil.
-- Ohne Bedienung aktualisiert sich das Display alle 15 Minuten und wenn sich in Home Assistant etwas ändert. Von 23 bis 6 Uhr bleibt es stehen.
+- Ohne Bedienung aktualisiert sich das Display alle 5 Minuten und wenn sich in Home Assistant etwas ändert, jeweils gründlich (ca. 4 s Flackern, voller Kontrast). Beim Drehen geht es schnell, dafür etwas blasser; 30 Sekunden nach der letzten Bedienung wird wieder gründlich gezeichnet. Von 23 bis 6 Uhr bleibt es stehen.
 
 ## Wenn etwas nicht stimmt
 
