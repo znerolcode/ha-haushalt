@@ -41,16 +41,16 @@ time:
     on_time_sync:
       - script.execute: zeichnen
     on_time:
-      # Alle 15 Minuten neu zeichnen, nachts (23 bis 6 Uhr) nicht.
-      # Zur vollen Stunde gründlicher Aufbau (ca. 4 s Flackern), das löscht Geisterbilder.
-      - minutes: /15
+      # Alle 5 Minuten neu zeichnen, nachts (23 bis 6 Uhr) nicht. Ohne Bedienung immer
+      # gründlich (ca. 4 s Flackern): voller Kontrast, keine Geisterbilder.
+      - minutes: /5
         seconds: 0
         then:
           - if:
               condition:
-                lambda: 'return id(zeit).now().hour >= 6 && id(zeit).now().hour < 23;'
+                lambda: 'return id(zeit).now().hour >= 6 && id(zeit).now().hour < 23 && flur::cursor < 0;'
               then:
-                - lambda: 'if (id(zeit).now().minute == 0) id(voll_noetig) = true;'
+                - lambda: 'id(voll_noetig) = true;'
                 - script.execute: zeichnen
 
 text_sensor:
@@ -224,9 +224,13 @@ script:
             lambda: 'return flur::modus == flur::QR;'
           then:
             - delay: 30s
-      - lambda: 'flur::ruhe();'
-      - component.update: epaper
-  # Neue Daten aus Home Assistant: kurz sammeln, dann zeichnen
+      # Zurück in Ruhe: gründlich zeichnen, die schnellen Schritte beim Drehen sind blasser
+      - lambda: |-
+          flur::ruhe();
+          id(voll_noetig) = true;
+      - script.execute: zeichnen
+  # Neue Daten aus Home Assistant: kurz sammeln, dann zeichnen.
+  # Während der Bedienung schnell, sonst gründlich.
   - id: daten_neu
     mode: restart
     then:
@@ -237,6 +241,7 @@ script:
               int h = id(zeit).now().is_valid() ? id(zeit).now().hour : 12;
               return flur::cursor >= 0 || (h >= 6 && h < 23);
           then:
+            - lambda: 'if (flur::cursor < 0) id(voll_noetig) = true;'
             - script.execute: zeichnen
 
 spi:
@@ -351,7 +356,7 @@ display:
     busy_pin:
       number: GPIO4
       inverted: true
-    # Teilaktualisierung beim Drehen, jede 30. Aktualisierung voll (entfernt Geisterbilder)
+    # Schnelle Aktualisierung beim Drehen, jede 30. voll; in Ruhe zeichnet das Skript "zeichnen" gründlich
     full_update_every: 30
     update_interval: never
     lambda: |-
