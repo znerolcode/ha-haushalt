@@ -1,5 +1,6 @@
 // Schematischer Grundriss für die Zimmerwahl am Flur-Display.
-// Koordinaten aus grundriss-dashboard/wohnung.svg (Einheiten des SVG, ca. 79 = 1 m).
+// Koordinaten aus grundriss-dashboard/wohnung.svg (Einheiten des SVG, ca. 79 = 1 m),
+// zwischen Küche und Wohnzimmer eine Lücke ergänzt wie bei den Wänden.
 // Für eine andere Wohnung: Zimmer, Segment-IDs (Roborock-Raum-IDs) und Rechtecke hier anpassen.
 #pragma once
 
@@ -24,8 +25,8 @@ static const Zimmer ZIMMER_LISTE[] = {
     {17, "WC", 1, {{588, 506, 80, 134}}},
     {18, "Bad", 1, {{418, 506, 160, 194}}},
     {22, "Réduit", 1, {{418, 712, 160, 96}}},
-    {19, "Wohnzimmer", 2, {{68, 648, 248, 512}, {316, 555, 89, 605}}},
-    {20, "Küche", 1, {{68, 506, 248, 142}}},
+    {19, "Wohnzimmer", 2, {{68, 648, 248, 512}, {316, 565, 89, 595}}},
+    {20, "Küche", 1, {{68, 506, 238, 132}}},
 };
 static const int ANZAHL_ZIMMER = sizeof(ZIMMER_LISTE) / sizeof(ZIMMER_LISTE[0]);
 
