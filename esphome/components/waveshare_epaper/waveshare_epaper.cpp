@@ -4373,8 +4373,9 @@ void HOT WaveshareEPaper7P5InV2P::display() {
 
   } else {
     // Enable partial refresh
+    // flur-display: vorgegebene Temperatur einstellbar (Original 0x6E = 110 °C)
     this->command(0xE5);
-    this->data(0x6E);
+    this->data(this->teil_temperatur_);
 
     // Activate partial refresh and set window bounds
     this->command(0x91);

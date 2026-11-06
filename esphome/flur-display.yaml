@@ -144,6 +144,31 @@ button:
     on_press:
       - script.execute: druecken
 
+number:
+  # Kontrast beim Drehen: 0 = schnell und blass (wie bisher), 10 = kräftig, aber träger.
+  # Die Stufe gibt dem Display bei der Teil-Aktualisierung eine Temperatur vor; je tiefer,
+  # desto länger werden die Partikel angetrieben. Ohne Bedienung wird ohnehin gründlich gezeichnet.
+  - platform: template
+    id: kontrast_drehen
+    name: "Kontrast beim Drehen"
+    icon: mdi:contrast-box
+    entity_category: config
+    mode: slider
+    min_value: 0
+    max_value: 10
+    step: 1
+    initial_value: 0
+    restore_value: true
+    optimistic: true
+    on_value:
+      - lambda: |-
+          static const uint8_t grad[] = {110, 100, 90, 80, 70, 60, 50, 40, 30, 25, 20};
+          int stufe = (int) x;
+          if (stufe < 0) stufe = 0;
+          if (stufe > 10) stufe = 10;
+          id(epaper).set_teil_temperatur(grad[stufe]);
+          ESP_LOGI("flur", "Kontrast beim Drehen: Stufe %d (%d Grad)", stufe, grad[stufe]);
+
 switch:
   # Neuere Treiberplatinen (Rev 2.3) haben eine 9. Leitung PWR, die eingeschaltet sein muss
   - platform: gpio

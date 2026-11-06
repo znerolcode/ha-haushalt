@@ -979,6 +979,10 @@ class WaveshareEPaper7P5InV2P : public WaveshareEPaper {
   // flur-display: nächste Aktualisierung als gründlicher Aufbau (normale Wellenform)
   void gruendlich_naechstes() { this->gruendlich_ = true; }
 
+  // flur-display: Temperatur (°C), die der Teil-Aktualisierung vorgegeben wird. Je tiefer,
+  // desto länger treibt das Display die Partikel an: kräftigeres Schwarz, aber langsamer.
+  void set_teil_temperatur(uint8_t grad) { this->teil_temperatur_ = grad; }
+
  protected:
   int get_width_internal() override;
 
@@ -989,6 +993,7 @@ class WaveshareEPaper7P5InV2P : public WaveshareEPaper {
   uint32_t full_update_every_{30};
   uint32_t at_update_{0};
   bool gruendlich_{false};
+  uint8_t teil_temperatur_{110};  // 0x6E wie im Original-Treiber
 
  private:
   void send_buffer_(bool invertiert);
