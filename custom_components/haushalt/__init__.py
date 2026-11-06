@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, time, timedelta
+# "date" ist hier zugleich der Name der Plattform date.py (überschreibt den Import)
+from datetime import date as Datum, time, timedelta
 import logging
 
 import voluptuous as vol
@@ -24,14 +25,15 @@ from .const import (
     ATTR_AUFGABE_ID,
     ATTR_START_IN_MIN,
     ATTR_ZIMMER,
-    CONF_ALLE_WOCHEN,
+    CONF_ANZAHL,
     CONF_DATEN,
+    CONF_EINHEIT,
     CONF_FRIST,
     CONF_REINIGUNG_X,
     CONF_REINIGUNG_Y,
     CONF_STARTDATUM,
     CONF_STAUBSAUGER,
-    CONF_TAGE,
+    CONF_VERPASST,
     CONF_TYP,
     CONF_MINDESTABSTAND,
     CONF_VORSCHAU,
@@ -44,6 +46,7 @@ from .const import (
     DEFAULT_ZEIT_ABEND,
     DEFAULT_ZEIT_MORGEN,
     DOMAIN,
+    EINHEIT_TAGE,
     EVENT_ERLEDIGT,
     FRIST_ABEND,
     SERVICE_ERLEDIGT,
@@ -53,7 +56,8 @@ from .const import (
     START_OPTIONEN,
     SUBENTRY_AUFGABE,
     TYP_INTERVALL,
-    TYP_WOCHENTAG,
+    TYP_TERMIN,
+    VERPASST_STEHEN,
     WETTER_INTERVALL_MIN,
     WOCHENTAGE,
 )
@@ -63,31 +67,42 @@ from .logic import (
     anzeige_zeilen,
     berechne_intervall,
     berechne_termin,
-    berechne_wochentag,
+    daten_umwandeln,
     naechster_termin,
     parse_daten,
 )
+from .formular import Formular
 from .sauger import Sauger
 from .wetter import WetterDienst
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.BUTTON, Platform.SENSOR]
+PLATFORMS = [
+    Platform.BUTTON,
+    Platform.DATE,
+    Platform.NUMBER,
+    Platform.SELECT,
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.TEXT,
+]
 STORAGE_VERSION = 1
 
 type HaushaltConfigEntry = ConfigEntry[HaushaltManager]
 
 
 def aufgabe_aus_subentry(subentry_id: str, title: str, data: dict) -> Aufgabe:
+    data = daten_umwandeln(data)
     start = data.get(CONF_STARTDATUM)
     return Aufgabe(
         id=subentry_id,
         name=title,
         typ=data[CONF_TYP],
-        tage=int(data.get(CONF_TAGE, 7)),
+        anzahl=int(data.get(CONF_ANZAHL, 7)),
+        einheit=data.get(CONF_EINHEIT, EINHEIT_TAGE),
+        verpasst=data.get(CONF_VERPASST, VERPASST_STEHEN),
         frist=data.get(CONF_FRIST, FRIST_ABEND),
-        startdatum=date.fromisoformat(start) if start else None,
-        alle_wochen=int(data.get(CONF_ALLE_WOCHEN, 0)),
+        startdatum=Datum.fromisoformat(start) if start else None,
         wochentage=sorted(WOCHENTAGE.index(t) for t in data.get(CONF_WOCHENTAGE, [])),
         mindestabstand=int(data.get(CONF_MINDESTABSTAND, 3)),
         daten=parse_daten(data.get(CONF_DATEN)),
@@ -106,14 +121,17 @@ class HaushaltManager:
         # zuletzt: {aufgabe_id: iso-datum}, erledigt: {aufgabe_id: [iso-datum, ...]},
         # erstellt: {aufgabe_id: iso-datum} für noch nie erledigte Wochentag-Aufgaben,
         # wetter: Zwischenspeicher für den heutigen Vormittag,
-        # sauger: geplanter Start und laufender Auftrag des Staubsaugers
+        # sauger: geplanter Start und laufender Auftrag des Staubsaugers,
+        # neu: zuletzt über das Formular angelegte Aufgabe {name, zeit}
         self._daten: dict = {
-            "zuletzt": {}, "erledigt": {}, "erstellt": {}, "wetter": {}, "sauger": {}
+            "zuletzt": {}, "erledigt": {}, "erstellt": {}, "wetter": {}, "sauger": {},
+            "neu": {},
         }
         self.aufgaben: dict[str, Aufgabe] = {}
         self.stati: dict[str, Status] = {}
         self.wetter: WetterDienst | None = None
         self.sauger: Sauger | None = None
+        self.formular = Formular()
 
     @property
     def signal(self) -> str:
@@ -143,6 +161,7 @@ class HaushaltManager:
         self._daten.setdefault("erstellt", {})
         self._daten.setdefault("wetter", {})
         self._daten.setdefault("sauger", {})
+        self._daten.setdefault("neu", {})
         # Saugstarts pro Aufgabe gibt es nicht mehr (bis 0.4)
         self._daten.pop("saugstart", None)
         if wetter_id := self.entry.options.get(CONF_WETTER):
@@ -175,7 +194,8 @@ class HaushaltManager:
                 start = subentry.data.get(CONF_ZULETZT) or heute.isoformat()
                 self._daten["zuletzt"][aufgabe.id] = start
             elif (
-                aufgabe.typ == TYP_WOCHENTAG
+                aufgabe.typ == TYP_TERMIN
+                and not aufgabe.verschwindet
                 and aufgabe.id not in self._daten["zuletzt"]
                 and aufgabe.id not in self._daten["erstellt"]
             ):
@@ -197,24 +217,23 @@ class HaushaltManager:
         jetzt = dt_util.now()
         stati: dict[str, Status] = {}
         for aufgabe in self.aufgaben.values():
+            zuletzt_iso = self._daten["zuletzt"].get(aufgabe.id)
+            zuletzt = Datum.fromisoformat(zuletzt_iso) if zuletzt_iso else None
             if aufgabe.typ == TYP_INTERVALL:
-                zuletzt = date.fromisoformat(self._daten["zuletzt"][aufgabe.id])
                 stati[aufgabe.id] = berechne_intervall(
-                    aufgabe, zuletzt, jetzt.date(), self._vorschau
-                )
-            elif aufgabe.typ == TYP_WOCHENTAG:
-                zuletzt_iso = self._daten["zuletzt"].get(aufgabe.id)
-                erstellt_iso = self._daten["erstellt"].get(aufgabe.id)
-                stati[aufgabe.id] = berechne_wochentag(
                     aufgabe,
-                    date.fromisoformat(zuletzt_iso) if zuletzt_iso else None,
-                    date.fromisoformat(erstellt_iso) if erstellt_iso else jetzt.date(),
-                    jetzt.date(),
+                    zuletzt or jetzt.date(),
+                    jetzt,
+                    self._zeit_morgen,
+                    self._zeit_abend,
                     self._vorschau,
                 )
             else:
+                erstellt_iso = self._daten["erstellt"].get(aufgabe.id)
                 stati[aufgabe.id] = berechne_termin(
                     aufgabe,
+                    zuletzt,
+                    Datum.fromisoformat(erstellt_iso) if erstellt_iso else jetzt.date(),
                     self._erledigte_termine(aufgabe.id),
                     jetzt,
                     self._zeit_morgen,
@@ -223,9 +242,9 @@ class HaushaltManager:
                 )
         self.stati = stati
 
-    def _erledigte_termine(self, aufgabe_id: str) -> set[date]:
+    def _erledigte_termine(self, aufgabe_id: str) -> set[Datum]:
         return {
-            date.fromisoformat(d) for d in self._daten["erledigt"].get(aufgabe_id, [])
+            Datum.fromisoformat(d) for d in self._daten["erledigt"].get(aufgabe_id, [])
         }
 
     @property
@@ -244,6 +263,14 @@ class HaushaltManager:
             await self._store.async_save(self._daten)
         async_dispatcher_send(self.hass, self.signal)
 
+    @property
+    def formular_meldung(self) -> dict:
+        return self._daten["neu"]
+
+    async def async_formular_meldung(self, name: str) -> None:
+        self._daten["neu"] = {"name": name, "zeit": dt_util.now().isoformat()}
+        await self._store.async_save(self._daten)
+
     async def _async_speichern(self) -> None:
         await self._store.async_save(self._daten)
 
@@ -256,7 +283,7 @@ class HaushaltManager:
                 translation_placeholders={"aufgabe_id": aufgabe_id},
             )
         jetzt = dt_util.now()
-        if aufgabe.typ in (TYP_INTERVALL, TYP_WOCHENTAG):
+        if aufgabe.typ == TYP_INTERVALL or not aufgabe.verschwindet:
             self._daten["zuletzt"][aufgabe_id] = jetzt.date().isoformat()
             self._daten["erstellt"].pop(aufgabe_id, None)
         else:
@@ -283,6 +310,21 @@ class HaushaltManager:
     def stoppen(self) -> None:
         if self.sauger is not None:
             self.sauger.stoppen()
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """1.1 -> 1.2: Aufgabentypen mit Einheit und 'wenn verpasst' (Version 0.7)."""
+    if entry.version > 1:
+        return False
+    if entry.minor_version < 2:
+        for subentry in list(entry.subentries.values()):
+            if subentry.subentry_type != SUBENTRY_AUFGABE:
+                continue
+            hass.config_entries.async_update_subentry(
+                entry, subentry, data=daten_umwandeln(dict(subentry.data))
+            )
+        hass.config_entries.async_update_entry(entry, minor_version=2)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HaushaltConfigEntry) -> bool:

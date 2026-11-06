@@ -8,6 +8,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import HaushaltConfigEntry
 from .entity import AufgabeEntity
+from .formular import FormularEntity, async_aufgabe_anlegen
 
 
 async def async_setup_entry(
@@ -16,6 +17,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     manager = entry.runtime_data
+    async_add_entities([AnlegenButton(manager)])
     for aufgabe_id in manager.aufgaben:
         async_add_entities(
             [ErledigtButton(manager, aufgabe_id)], config_subentry_id=aufgabe_id
@@ -34,3 +36,15 @@ class ErledigtButton(AufgabeEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.manager.async_erledigt(self.aufgabe_id)
+
+
+class AnlegenButton(FormularEntity, ButtonEntity):
+    """Legt die Aufgabe aus dem Formular 'Neue Aufgabe' an."""
+
+    _attr_icon = "mdi:plus-circle-outline"
+
+    def __init__(self, manager) -> None:
+        self._formular_init(manager, "button", "anlegen")
+
+    async def async_press(self) -> None:
+        await async_aufgabe_anlegen(self.manager)

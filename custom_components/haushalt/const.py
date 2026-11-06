@@ -4,9 +4,22 @@ DOMAIN = "haushalt"
 
 SUBENTRY_AUFGABE = "aufgabe"
 
+# Intervall: alle X Einheiten ab dem letzten Abhaken. Termin: feste Daten ab einem Startdatum.
 TYP_INTERVALL = "intervall"
 TYP_TERMIN = "termin"
+# Bis 0.6 ein eigener Typ, wird beim Laden in einen Termin umgewandelt
 TYP_WOCHENTAG = "wochentag"
+TYPEN = [TYP_INTERVALL, TYP_TERMIN]
+
+EINHEIT_TAGE = "tage"
+EINHEIT_WOCHEN = "wochen"
+EINHEIT_MONATE = "monate"
+EINHEITEN = [EINHEIT_TAGE, EINHEIT_WOCHEN, EINHEIT_MONATE]
+
+# Was mit einer verpassten Aufgabe passiert
+VERPASST_STEHEN = "stehen"
+VERPASST_WEG = "weg"
+VERPASST = [VERPASST_STEHEN, VERPASST_WEG]
 
 FRIST_MORGEN = "morgen"
 FRIST_ABEND = "abend"
@@ -19,11 +32,14 @@ GRUPPE_NAECHSTE = "Nächste Tage"
 # Felder einer Aufgabe
 CONF_NAME = "name"
 CONF_TYP = "typ"
-CONF_TAGE = "tage"
+CONF_TAGE = "tage"  # bis 0.6, jetzt anzahl + einheit
+CONF_ANZAHL = "anzahl"
+CONF_EINHEIT = "einheit"
+CONF_VERPASST = "verpasst"
 CONF_ZULETZT = "zuletzt_erledigt"
 CONF_FRIST = "frist"
 CONF_STARTDATUM = "startdatum"
-CONF_ALLE_WOCHEN = "alle_wochen"
+CONF_ALLE_WOCHEN = "alle_wochen"  # bis 0.6, jetzt anzahl + einheit
 CONF_DATEN = "weitere_daten"
 CONF_WOCHENTAGE = "wochentage"
 CONF_MINDESTABSTAND = "mindestabstand"

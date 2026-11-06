@@ -4,15 +4,19 @@ Home-Assistant-Integration für wiederkehrende Haushaltsaufgaben. Gedacht für e
 
 ## Aufgabentypen
 
-| Typ | Beispiel | Fällig | Wenn verpasst |
-| --- | --- | --- | --- |
-| Intervall | Bettwäsche alle 14 Tage | X Tage nach dem letzten Abhaken | bleibt stehen, „2 Tage überfällig“ |
-| Wochentag | Bad putzen jeden Samstag | an den gewählten Wochentagen (auch mehrere, auch alle X Wochen) | bleibt stehen, bis erledigt |
-| Termin | Altkarton alle 2 Wochen dienstags | am Termintag, Frist „Morgen“ oder „Abend“ | verschwindet nach der Frist |
+| Typ | Beispiel | Fällig |
+| --- | --- | --- |
+| Intervall | Bettwäsche alle 2 Wochen | X Tage, Wochen oder Monate nach dem letzten Abhaken |
+| Fester Termin | Altkarton jeden 2. Dienstag, Pflanzen Mo und Do, Miete jeden 31. | ab dem ersten Termin alle X Tage, Wochen (an gewählten Wochentagen) oder Monate (gleiches Datum, sonst Monatsletzter), dazu einzelne Daten |
 
-Wochentag-Aufgaben haben einen Mindestabstand (Standard 3 Tage): Wird die Aufgabe z.B. am Donnerstag erledigt, entfällt der Samstag zwei Tage später, fällig ist erst der übernächste Samstag.
+Bei jeder Aufgabe wählst du, was passiert, **wenn sie verpasst** wird:
 
-Anzeigetexte: Intervall und Wochentag „in 4 Tagen“, „morgen“, „heute“, „1 Tag überfällig“. Termin „bis in 3 Tagen“, „bis morgen früh“, „bis heute Abend“.
+- **Bleibt überfällig stehen:** „2 Tage überfällig“, bis sie erledigt ist. Feste Termine haben dann einen Mindestabstand (Standard 3 Tage): Wird die Aufgabe z.B. am Donnerstag erledigt, entfällt der Samstag zwei Tage später.
+- **Verschwindet:** Mit Frist „Morgen“ oder „Abend“ am Fälligkeitstag. Danach fällt die Aufgabe weg und kommt beim nächsten Termin wieder; ein Intervall zählt dann ab dem verpassten Tag weiter.
+
+Anzeigetexte: bleibt stehen „in 4 Tagen“, „morgen“, „heute“, „1 Tag überfällig“; verschwindet „bis in 3 Tagen“, „bis morgen früh“, „bis heute Abend“.
+
+Aufgaben aus Version 0.5 und älter werden beim ersten Start automatisch umgewandelt: Intervall → Intervall in Tagen (bleibt stehen), Wochentag → fester Termin in Wochen (bleibt stehen), Termin → fester Termin in Wochen (verschwindet).
 
 ## Installation über HACS
 
@@ -25,7 +29,17 @@ Anzeigetexte: Intervall und Wochentag „in 4 Tagen“, „morgen“, „heute�
 
 Unter **Einstellungen → Geräte & Dienste → Haushalt** auf **Aufgabe hinzufügen** klicken. Bestehende Aufgaben lassen sich dort über ⋮ → **Neu konfigurieren** ändern oder löschen.
 
-Termin-Aufgaben: Das erste Datum bestimmt den Wochentag, „alle X Wochen“ die Wiederholung. Unregelmässige Termine (z.B. aus dem Abfuhrkalender) trägst du unter „Weitere einzelne Termine“ ein: `05.11.2026, 19.11.2026`.
+### Aufgaben ohne Administratorrechte anlegen
+
+Die Haushalt-Seite unter Geräte & Dienste können nur Administratoren bedienen. Für alle anderen Konten bringt die Integration ein Formular als Gerät **Neue Aufgabe** mit (Felder wie `text.neue_aufgabe_name`, `select.neue_aufgabe_typ` und der Knopf `button.neue_aufgabe_anlegen`). Dazu gehört die Dashboard-Vorlage [`dashboard/neue-aufgabe.yaml`](dashboard/neue-aufgabe.yaml), die je nach Typ nur die passenden Felder zeigt:
+
+1. **Einstellungen → Dashboards → Dashboard hinzufügen → Neues Dashboard von Grund auf**, Titel „Neue Aufgabe“, URL `neue-aufgabe`, **Nur für Administratoren** aus.
+2. Dashboard öffnen, Stift → ⋮ → **Raw-Konfigurationseditor**, alles durch den Inhalt der Vorlage ersetzen, speichern.
+3. Die Seite heisst dann `http://<adresse-deines-ha>:8123/neue-aufgabe/neu`. Diese Adresse fürs Flur-Display als `neue_aufgabe_url` eintragen (siehe `esphome/ANLEITUNG.md`).
+
+Nach **Aufgabe anlegen** ist das Formular wieder leer, darunter steht die zuletzt angelegte Aufgabe. Fehlt etwas (Name, Termin), erscheint unten ein Hinweis. Ändern und löschen bleibt Administratoren vorbehalten.
+
+Feste Termine: Bei „Wochen“ ohne gewählte Wochentage bestimmt das erste Datum den Wochentag. „Wiederholen alle 0“ heisst nicht wiederholen. Unregelmässige Termine (z.B. aus dem Abfuhrkalender) trägst du unter „Weitere einzelne Termine“ ein: `05.11.2026, 19.11.2026`.
 
 
 Unter **Konfigurieren** stellst du ein, wann die Fristen „Morgen“ (Standard 09:00) und „Abend“ (23:59) enden und wie viele Tage im Voraus Aufgaben erscheinen (Standard 7).
@@ -37,12 +51,13 @@ Optional wählst du unter **Konfigurieren** auch einen **Staubsauger** (getestet
 ## Entitäten
 
 - Pro Aufgabe ein Sensor **Fälligkeit** (Zustand z.B. „in 4 Tagen“, Attribute `faellig_am`, `tage`, `gruppe`, `aufgabe_id`) und ein Knopf **Erledigt**.
+- Gerät **Neue Aufgabe**: Formularfelder `text.neue_aufgabe_name`, `select.neue_aufgabe_typ`, `select.neue_aufgabe_verpasst`, `number.neue_aufgabe_anzahl`, `select.neue_aufgabe_einheit`, `date.neue_aufgabe_zuletzt`, `switch.neue_aufgabe_mo` … `_so`, `number.neue_aufgabe_mindestabstand`, `date.neue_aufgabe_datum`, `select.neue_aufgabe_frist`, `text.neue_aufgabe_weitere`, Knopf `button.neue_aufgabe_anlegen` und `sensor.neue_aufgabe_meldung` (zuletzt angelegte Aufgabe). Die Werte gelten nur bis zum Anlegen oder bis zum Neustart.
 - `sensor.aufgaben`: Anzahl sichtbarer Aufgaben. Attribut `aufgaben` als Liste, Attribut `anzeige` als Text für das Display, eine Zeile pro Aufgabe: `aufgabe_id|gruppe|name|text|ueberfaellig` (`ueberfaellig` 0 oder 1). Attribut `sauger` (nur mit Staubsauger, sonst leer): `zustand|uhrzeit|zimmer`, z.B. `geplant|17:05|19,20` oder `saugt||`. Zustände: `bereit`, `geplant`, `saugt`, `pausiert`, `zurueck`, `reinigen`, `steht`, `fehler`.
 - `sensor.display_wetter` (nur mit Wetter-Entität): Zustand ist das Wetter des aktuellen Halbtags. Attribut `tage` als Liste, Attribut `anzeige` als Text, eine Zeile pro Tag: `tag|zustand|temperatur|regen|menge|zustand|temperatur|regen|menge|tiefst|tiefst` (erst Vormittag, dann Nachmittag; die beiden Tiefstwerte in °C stehen am Schluss). `zustand` ist ein Wetterzustand von Home Assistant (`sunny`, `rainy`, …), `temperatur` die höchste Temperatur in °C, `regen` die höchste Regenwahrscheinlichkeit (`40 %`), `menge` die Niederschlagsmenge (`1,2 mm`, leer bei 0). Fehlende Werte bleiben leer. Für den Zustand zählt der häufigste der Stunden, bei Gleichstand der schlechtere. Fehlen stündliche Daten, kommen die Werte aus der Tagesvorhersage.
 
 ## Dienste
 
-- `haushalt.erledigt` mit `aufgabe_id` hakt eine Aufgabe ab. Bei Termin-Aufgaben wird der nächste offene Termin abgehakt.
+- `haushalt.erledigt` mit `aufgabe_id` hakt eine Aufgabe ab. Bei Aufgaben, die verschwinden, wird der nächste offene Termin abgehakt.
 - `haushalt.saugen` startet den Staubsauger. `zimmer`: Raum-IDs, z.B. `19,20` (leer = ganze Wohnung, sonst `app_segment_clean`). `start_in_min`: 0, 5, 20 oder 60. Ein geplanter Start übersteht einen Neustart von HA; war HA länger als 15 Minuten über den Zeitpunkt hinaus aus, entfällt er.
 - `haushalt.sauger` mit `aktion`: `pausieren`, `fortsetzen`, `abbrechen` (geplanten Start löschen bzw. zurück zur Station) oder `reinigen` (zum Reinigungspunkt fahren).
 

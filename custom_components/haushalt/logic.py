@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import calendar
 from datetime import date, datetime, time, timedelta
 import re
 
 from .const import (
+    EINHEIT_TAGE,
+    EINHEIT_WOCHEN,
     FRIST_ABEND,
     FRIST_MORGEN,
     GRUPPE_HEUTE,
@@ -16,6 +19,8 @@ from .const import (
     TYP_INTERVALL,
     TYP_TERMIN,
     TYP_WOCHENTAG,
+    VERPASST_STEHEN,
+    VERPASST_WEG,
 )
 
 GRUPPEN_REIHENFOLGE = [GRUPPE_UEBERFAELLIG, GRUPPE_HEUTE, GRUPPE_MORGEN, GRUPPE_NAECHSTE]
@@ -28,16 +33,23 @@ class Aufgabe:
     id: str
     name: str
     typ: str
-    # Intervall
-    tage: int = 7
-    # Termin
+    # Alle `anzahl` Einheiten. Beim Termin heisst 0: nicht wiederholen.
+    anzahl: int = 7
+    einheit: str = EINHEIT_TAGE
+    verpasst: str = VERPASST_STEHEN
+    # Nur bei verpasst = weg: bis wann am Fälligkeitstag
     frist: str = FRIST_ABEND
+    # Termin
     startdatum: date | None = None
-    alle_wochen: int = 0
     daten: list[date] = field(default_factory=list)
-    # Wochentag (0 = Montag); startdatum legt bei alle_wochen > 1 die Woche fest
+    # Termin in Wochen (0 = Montag); leer = Wochentag des Startdatums
     wochentage: list[int] = field(default_factory=list)
+    # Termin, der stehen bleibt: Plantag entfällt, wenn so kurz vorher erledigt
     mindestabstand: int = 3
+
+    @property
+    def verschwindet(self) -> bool:
+        return self.verpasst == VERPASST_WEG
 
 
 @dataclass
@@ -60,7 +72,7 @@ class Status:
         return (
             GRUPPEN_REIHENFOLGE.index(self.gruppe) if self.gruppe else 99,
             self.tage if self.tage is not None else 9999,
-            0 if self.aufgabe.typ == TYP_TERMIN else 1,
+            0 if self.aufgabe.verschwindet else 1,
             frist_rang,
             self.aufgabe.name.lower(),
         )
@@ -116,88 +128,15 @@ def text_termin(tage: int, frist: str) -> str:
     return f"bis in {tage} Tagen"
 
 
-def berechne_intervall(
-    aufgabe: Aufgabe, zuletzt: date, heute: date, vorschau_tage: int
-) -> Status:
-    datum = zuletzt + timedelta(days=aufgabe.tage)
-    tage = (datum - heute).days
-    return Status(
-        aufgabe=aufgabe,
-        datum=datum,
-        tage=tage,
-        gruppe=gruppe_fuer(tage),
-        text=text_intervall(tage),
-        sichtbar=tage <= vorschau_tage,
-    )
-
-
-def ist_plantag(aufgabe: Aufgabe, datum: date) -> bool:
-    """Liegt das Datum auf einem gewählten Wochentag in einer passenden Woche?"""
-    if datum.weekday() not in aufgabe.wochentage:
-        return False
-    if aufgabe.alle_wochen <= 1 or aufgabe.startdatum is None:
-        return True
-    start_montag = aufgabe.startdatum - timedelta(days=aufgabe.startdatum.weekday())
-    wochen = (datum - start_montag).days // 7
-    return wochen % aufgabe.alle_wochen == 0
-
-
-def faellig_wochentag(aufgabe: Aufgabe, zuletzt: date | None, erstellt: date) -> date | None:
-    """Erster Plantag, der mindestens `mindestabstand` Tage nach dem Erledigen liegt.
-
-    Noch nie erledigt: erster Plantag ab dem Erstellen der Aufgabe.
-    """
-    if zuletzt is None:
-        ab = erstellt
-    else:
-        ab = zuletzt + timedelta(days=max(aufgabe.mindestabstand, 1))
-    if aufgabe.startdatum is not None and aufgabe.startdatum > ab:
-        ab = aufgabe.startdatum
-    for i in range(7 * max(aufgabe.alle_wochen, 1) + 7):
-        datum = ab + timedelta(days=i)
-        if ist_plantag(aufgabe, datum):
-            return datum
-    return None
-
-
-def berechne_wochentag(
-    aufgabe: Aufgabe,
-    zuletzt: date | None,
-    erstellt: date,
-    heute: date,
-    vorschau_tage: int,
-) -> Status:
-    datum = faellig_wochentag(aufgabe, zuletzt, erstellt)
-    if datum is None:
-        return Status(aufgabe, None, None, None, "kein Wochentag", False)
-    tage = (datum - heute).days
-    return Status(
-        aufgabe=aufgabe,
-        datum=datum,
-        tage=tage,
-        gruppe=gruppe_fuer(tage),
-        text=text_intervall(tage),
-        sichtbar=tage <= vorschau_tage,
-    )
-
-
-def termine_ab(aufgabe: Aufgabe, ab: date, anzahl: int = 5) -> list[date]:
-    """Die nächsten Termine ab (inklusive) einem Datum, aus Regel und Einzeldaten."""
-    kandidaten = {d for d in aufgabe.daten if d >= ab}
-    if aufgabe.startdatum is not None:
-        if aufgabe.alle_wochen > 0:
-            schritt = 7 * aufgabe.alle_wochen
-            if aufgabe.startdatum >= ab:
-                erster = aufgabe.startdatum
-            else:
-                k = -(-(ab - aufgabe.startdatum).days // schritt)
-                erster = aufgabe.startdatum + timedelta(days=k * schritt)
-            kandidaten.update(
-                erster + timedelta(days=i * schritt) for i in range(anzahl)
-            )
-        elif aufgabe.startdatum >= ab:
-            kandidaten.add(aufgabe.startdatum)
-    return sorted(kandidaten)[:anzahl]
+def plus(datum: date, anzahl: int, einheit: str) -> date:
+    """Datum plus `anzahl` Tage, Wochen oder Monate (Monatsende wird gekürzt, 31.1. + 1 = 28.2.)."""
+    if einheit == EINHEIT_TAGE:
+        return datum + timedelta(days=anzahl)
+    if einheit == EINHEIT_WOCHEN:
+        return datum + timedelta(weeks=anzahl)
+    monate = datum.month - 1 + anzahl
+    jahr, monat = datum.year + monate // 12, monate % 12 + 1
+    return date(jahr, monat, min(datum.day, calendar.monthrange(jahr, monat)[1]))
 
 
 def frist_zeitpunkt(
@@ -205,6 +144,117 @@ def frist_zeitpunkt(
 ) -> datetime:
     zeit = zeit_morgen if frist == FRIST_MORGEN else zeit_abend
     return datetime.combine(datum, zeit, tzinfo=tz)
+
+
+def _status(aufgabe: Aufgabe, datum: date | None, heute: date, vorschau_tage: int) -> Status:
+    if datum is None:
+        return Status(aufgabe, None, None, None, "kein Termin", False)
+    tage = (datum - heute).days
+    text = text_termin(tage, aufgabe.frist) if aufgabe.verschwindet else text_intervall(tage)
+    return Status(
+        aufgabe=aufgabe,
+        datum=datum,
+        tage=tage,
+        gruppe=gruppe_fuer(tage),
+        text=text,
+        sichtbar=tage <= vorschau_tage,
+    )
+
+
+def faellig_intervall(
+    aufgabe: Aufgabe, zuletzt: date, jetzt: datetime, zeit_morgen: time, zeit_abend: time
+) -> date:
+    """Fälligkeit `anzahl` Einheiten nach dem Erledigen.
+
+    Verschwindet die Aufgabe, wenn verpasst: ist die Frist abgelaufen, zählt das
+    Intervall ab dem verpassten Tag weiter.
+    """
+    anzahl = max(aufgabe.anzahl, 1)
+    datum = plus(zuletzt, anzahl, aufgabe.einheit)
+    if not aufgabe.verschwindet:
+        return datum
+    k = 1
+    while (
+        frist_zeitpunkt(datum, aufgabe.frist, zeit_morgen, zeit_abend, jetzt.tzinfo) <= jetzt
+        and k < 10000
+    ):
+        k += 1
+        datum = plus(zuletzt, k * anzahl, aufgabe.einheit)
+    return datum
+
+
+def berechne_intervall(
+    aufgabe: Aufgabe,
+    zuletzt: date,
+    jetzt: datetime,
+    zeit_morgen: time,
+    zeit_abend: time,
+    vorschau_tage: int,
+) -> Status:
+    datum = faellig_intervall(aufgabe, zuletzt, jetzt, zeit_morgen, zeit_abend)
+    return _status(aufgabe, datum, jetzt.date(), vorschau_tage)
+
+
+def _regel_termine(aufgabe: Aufgabe, ab: date, anzahl: int) -> list[date]:
+    """Die nächsten `anzahl` Termine der Wiederholung ab (inklusive) einem Datum."""
+    start = aufgabe.startdatum
+    schritt = aufgabe.anzahl
+    if aufgabe.einheit == EINHEIT_WOCHEN and (aufgabe.wochentage or start is None):
+        tage = aufgabe.wochentage or ([start.weekday()] if start else [])
+        if not tage:
+            return []
+        if start is None:
+            # Ohne Startdatum (alte Wochentag-Aufgaben) gibt es keine Ankerwoche
+            anker, schritt, erster = ab - timedelta(days=ab.weekday()), 1, ab
+        else:
+            if schritt <= 0:
+                return [start] if start >= ab else []
+            anker = start - timedelta(days=start.weekday())
+            erster = max(ab, start)
+        termine = []
+        for i in range(7 * schritt * (anzahl + 1)):
+            datum = erster + timedelta(days=i)
+            if datum.weekday() in tage and ((datum - anker).days // 7) % schritt == 0:
+                termine.append(datum)
+                if len(termine) >= anzahl:
+                    break
+        return termine
+    if start is None:
+        return []
+    if schritt <= 0:
+        return [start] if start >= ab else []
+    k = 0
+    if aufgabe.einheit == EINHEIT_TAGE and ab > start:
+        k = -(-(ab - start).days // schritt)
+    termine = []
+    while len(termine) < anzahl and k < 100000:
+        datum = plus(start, k * schritt, aufgabe.einheit)
+        if datum >= ab:
+            termine.append(datum)
+        k += 1
+    return termine
+
+
+def termine_ab(aufgabe: Aufgabe, ab: date, anzahl: int = 5) -> list[date]:
+    """Die nächsten Termine ab (inklusive) einem Datum, aus Regel und Einzeldaten."""
+    kandidaten = {d for d in aufgabe.daten if d >= ab}
+    kandidaten.update(_regel_termine(aufgabe, ab, anzahl))
+    return sorted(kandidaten)[:anzahl]
+
+
+def faellig_termin_stehen(
+    aufgabe: Aufgabe, zuletzt: date | None, erstellt: date
+) -> date | None:
+    """Erster Termin, der mindestens `mindestabstand` Tage nach dem Erledigen liegt.
+
+    Noch nie erledigt: erster Termin ab dem Erstellen der Aufgabe.
+    """
+    if zuletzt is None:
+        ab = erstellt
+    else:
+        ab = zuletzt + timedelta(days=max(aufgabe.mindestabstand, 1))
+    termine = termine_ab(aufgabe, ab, 1)
+    return termine[0] if termine else None
 
 
 def naechster_termin(
@@ -226,24 +276,52 @@ def naechster_termin(
 
 def berechne_termin(
     aufgabe: Aufgabe,
+    zuletzt: date | None,
+    erstellt: date,
     erledigt: set[date],
     jetzt: datetime,
     zeit_morgen: time,
     zeit_abend: time,
     vorschau_tage: int,
 ) -> Status:
-    datum = naechster_termin(aufgabe, erledigt, jetzt, zeit_morgen, zeit_abend)
-    if datum is None:
-        return Status(aufgabe, None, None, None, "kein Termin", False)
-    tage = (datum - jetzt.date()).days
-    return Status(
-        aufgabe=aufgabe,
-        datum=datum,
-        tage=tage,
-        gruppe=gruppe_fuer(tage),
-        text=text_termin(tage, aufgabe.frist),
-        sichtbar=tage <= vorschau_tage,
-    )
+    if aufgabe.verschwindet:
+        datum = naechster_termin(aufgabe, erledigt, jetzt, zeit_morgen, zeit_abend)
+    else:
+        datum = faellig_termin_stehen(aufgabe, zuletzt, erstellt)
+    return _status(aufgabe, datum, jetzt.date(), vorschau_tage)
+
+
+def daten_umwandeln(daten: dict) -> dict:
+    """Daten einer Aufgabe aus Version 0.6 und älter ins neue Format.
+
+    Intervall (tage) -> Intervall in Tagen, bleibt stehen.
+    Wochentag -> Termin in Wochen mit Wochentagen, bleibt stehen.
+    Termin -> Termin in Wochen, verschwindet.
+    """
+    if CONF_EINHEIT_KEY in daten:
+        return dict(daten)
+    neu = dict(daten)
+    typ = neu.get("typ")
+    if typ == TYP_INTERVALL:
+        neu["anzahl"] = int(neu.pop("tage", 7))
+        neu["einheit"] = EINHEIT_TAGE
+        neu["verpasst"] = VERPASST_STEHEN
+        neu.setdefault("frist", FRIST_ABEND)
+    elif typ == TYP_WOCHENTAG:
+        neu["typ"] = TYP_TERMIN
+        neu["anzahl"] = max(int(neu.pop("alle_wochen", 1)), 1)
+        neu["einheit"] = EINHEIT_WOCHEN
+        neu["verpasst"] = VERPASST_STEHEN
+        neu.setdefault("frist", FRIST_ABEND)
+    else:
+        neu["anzahl"] = int(neu.pop("alle_wochen", 0))
+        neu["einheit"] = EINHEIT_WOCHEN
+        neu["verpasst"] = VERPASST_WEG
+        neu.setdefault("wochentage", [])
+    return neu
+
+
+CONF_EINHEIT_KEY = "einheit"
 
 
 def anzeige_zeilen(stati: list[Status]) -> str:

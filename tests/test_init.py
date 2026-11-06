@@ -36,13 +36,15 @@ async def entry(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> MockConf
     return hass.config_entries.async_entries(DOMAIN)[0]
 
 
-async def aufgabe_anlegen(hass, entry, name, typ, details):
+async def aufgabe_anlegen(hass, entry, name, typ, details, verpasst=None):
+    if verpasst is None:
+        verpasst = "weg" if typ == "termin" else "stehen"
     result = await hass.config_entries.subentries.async_init(
         (entry.entry_id, SUBENTRY_AUFGABE), context={"source": SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"name": name, "typ": typ}
+        result["flow_id"], {"name": name, "typ": typ, "verpasst": verpasst}
     )
     assert result["step_id"] == typ
     result = await hass.config_entries.subentries.async_configure(result["flow_id"], details)
@@ -59,12 +61,12 @@ def sensor_id(hass, entry, name):
 async def test_ablauf(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactory):
     r = await aufgabe_anlegen(
         hass, entry, "Bettwäsche waschen", "intervall",
-        {"tage": 14, "zuletzt_erledigt": "2026-10-16"},
+        {"anzahl": 14, "einheit": "tage", "zuletzt_erledigt": "2026-10-16"},
     )
     assert r["type"] is FlowResultType.CREATE_ENTRY
     r = await aufgabe_anlegen(
         hass, entry, "Altkarton deponieren", "termin",
-        {"frist": "morgen", "startdatum": "2026-10-27", "alle_wochen": 2},
+        {"frist": "morgen", "startdatum": "2026-10-27", "anzahl": 2, "einheit": "wochen"},
     )
     assert r["type"] is FlowResultType.CREATE_ENTRY
 
@@ -102,7 +104,7 @@ async def test_ablauf(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactory
 async def test_termin_verschwindet(hass, entry, freezer: FrozenDateTimeFactory):
     await aufgabe_anlegen(
         hass, entry, "Kehricht", "termin",
-        {"frist": "abend", "startdatum": "2026-10-29", "alle_wochen": 1},
+        {"frist": "abend", "startdatum": "2026-10-29", "anzahl": 1, "einheit": "wochen"},
     )
     kehricht, _ = sensor_id(hass, entry, "Kehricht")
     assert hass.states.get(kehricht).state == "bis in 3 Tagen"
@@ -121,25 +123,25 @@ async def test_termin_fehler(hass, entry):
         (entry.entry_id, SUBENTRY_AUFGABE), context={"source": SOURCE_USER}
     )
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"name": "Papier", "typ": "termin"}
+        result["flow_id"], {"name": "Papier", "typ": "termin", "verpasst": "weg"}
     )
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"frist": "abend", "alle_wochen": 4}
+        result["flow_id"], {"frist": "abend", "anzahl": 4, "einheit": "wochen"}
     )
     assert result["errors"] == {"base": "kein_termin"}
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"frist": "abend", "alle_wochen": 0, "weitere_daten": "5.11."}
+        result["flow_id"], {"frist": "abend", "anzahl": 0, "einheit": "wochen", "weitere_daten": "5.11."}
     )
     assert result["errors"] == {"weitere_daten": "ungueltige_daten"}
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"frist": "abend", "alle_wochen": 0, "weitere_daten": "05.11.2026"}
+        result["flow_id"], {"frist": "abend", "anzahl": 0, "einheit": "wochen", "weitere_daten": "05.11.2026"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
 async def test_bearbeiten(hass, entry):
     await aufgabe_anlegen(
-        hass, entry, "Bad putzen", "intervall", {"tage": 7, "zuletzt_erledigt": "2026-10-24"}
+        hass, entry, "Bad putzen", "intervall", {"anzahl": 7, "einheit": "tage", "zuletzt_erledigt": "2026-10-24"}
     )
     bad, sub = sensor_id(hass, entry, "Bad putzen")
     assert hass.states.get(bad).state == "in 5 Tagen"
@@ -149,11 +151,11 @@ async def test_bearbeiten(hass, entry):
     )
     assert result["step_id"] == "reconfigure_typ"
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"name": "Bad putzen", "typ": "intervall"}
+        result["flow_id"], {"name": "Bad putzen", "typ": "intervall", "verpasst": "stehen"}
     )
     assert result["step_id"] == "intervall"
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"tage": 3}
+        result["flow_id"], {"anzahl": 3, "einheit": "tage"}
     )
     assert result["type"] is FlowResultType.ABORT
     await hass.async_block_till_done()
@@ -168,7 +170,7 @@ async def test_nur_eine_instanz(hass, entry):
 async def test_optionen(hass, entry):
     await aufgabe_anlegen(
         hass, entry, "Altkarton", "termin",
-        {"frist": "morgen", "startdatum": "2026-11-03", "alle_wochen": 2},
+        {"frist": "morgen", "startdatum": "2026-11-03", "anzahl": 2, "einheit": "wochen"},
     )
     karton, _ = sensor_id(hass, entry, "Altkarton")
     assert hass.states.get(karton).state == "bis in 8 Tagen"
@@ -324,7 +326,7 @@ async def test_reinigen_ohne_punkt(hass, entry):
 async def test_erledigt_alter_parameter(hass, entry):
     """Ältere Display-Firmware schickt noch start_in_min mit."""
     await aufgabe_anlegen(
-        hass, entry, "Bad putzen", "intervall", {"tage": 7, "zuletzt_erledigt": "2026-10-24"}
+        hass, entry, "Bad putzen", "intervall", {"anzahl": 7, "einheit": "tage", "zuletzt_erledigt": "2026-10-24"}
     )
     _, sub = sensor_id(hass, entry, "Bad putzen")
     await hass.services.async_call(
@@ -333,20 +335,63 @@ async def test_erledigt_alter_parameter(hass, entry):
     assert hass.states.get(knopf_id(hass, sub, "erledigt")).name.endswith("Erledigt")
 
 
+async def test_alte_aufgaben_umwandeln(hass: HomeAssistant, freezer: FrozenDateTimeFactory):
+    """Aufgaben aus 0.6 (Intervall in Tagen, Wochentag, Termin) werden beim Start umgewandelt."""
+    await hass.config.async_set_time_zone("Europe/Zurich")
+    freezer.move_to(START)
+    alt = MockConfigEntry(
+        domain=DOMAIN, title="Haushalt", unique_id=DOMAIN, version=1, minor_version=1,
+        subentries_data=[
+            {"data": {"typ": "intervall", "tage": 14, "zuletzt_erledigt": "2026-10-16"},
+             "subentry_type": "aufgabe", "title": "Bettwäsche", "unique_id": None},
+            {"data": {"typ": "wochentag", "wochentage": ["sa"], "alle_wochen": 1,
+                      "startdatum": None, "mindestabstand": 3},
+             "subentry_type": "aufgabe", "title": "Bad", "unique_id": None},
+            {"data": {"typ": "termin", "frist": "morgen", "startdatum": "2026-10-27",
+                      "alle_wochen": 2, "weitere_daten": ""},
+             "subentry_type": "aufgabe", "title": "Altkarton", "unique_id": None},
+        ],
+    )
+    alt.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(alt.entry_id)
+    await hass.async_block_till_done()
+    assert alt.minor_version == 2
+    daten = {s.title: dict(s.data) for s in alt.subentries.values()}
+    assert daten["Bettwäsche"]["einheit"] == "tage"
+    assert daten["Bad"]["typ"] == "termin" and daten["Bad"]["verpasst"] == "stehen"
+    assert daten["Altkarton"]["verpasst"] == "weg"
+    assert hass.states.get(sensor_id(hass, alt, "Bettwäsche")[0]).state == "in 4 Tagen"
+    assert hass.states.get(sensor_id(hass, alt, "Bad")[0]).state == "in 5 Tagen"
+    assert hass.states.get(sensor_id(hass, alt, "Altkarton")[0]).state == "bis morgen früh"
+
+
+async def test_monatlich_verschwindet(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactory):
+    await aufgabe_anlegen(
+        hass, entry, "Miete", "termin",
+        {"startdatum": "2026-01-31", "anzahl": 1, "einheit": "monate", "frist": "abend"},
+    )
+    miete, _ = sensor_id(hass, entry, "Miete")
+    assert hass.states.get(miete).state == "bis in 5 Tagen"
+    freezer.move_to(datetime(2026, 11, 1, 9, 0, tzinfo=START.tzinfo))
+    hass.config_entries.async_get_entry(entry.entry_id).runtime_data.aktualisieren()
+    await hass.async_block_till_done()
+    assert hass.states.get(miete).attributes["faellig_am"] == "2026-11-30"
+
+
 async def test_wochentag(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactory):
     result = await hass.config_entries.subentries.async_init(
         (entry.entry_id, SUBENTRY_AUFGABE), context={"source": SOURCE_USER}
     )
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"name": "Bad putzen", "typ": "wochentag"}
+        result["flow_id"], {"name": "Bad putzen", "typ": "termin", "verpasst": "stehen"}
     )
-    assert result["step_id"] == "wochentag"
+    assert result["step_id"] == "termin"
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"wochentage": [], "alle_wochen": 1, "mindestabstand": 3}
+        result["flow_id"], {"wochentage": [], "anzahl": 1, "einheit": "wochen", "mindestabstand": 3}
     )
-    assert result["errors"] == {"wochentage": "kein_wochentag"}
+    assert result["errors"] == {"base": "kein_termin"}
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"wochentage": ["sa"], "alle_wochen": 1, "mindestabstand": 3}
+        result["flow_id"], {"wochentage": ["sa"], "anzahl": 1, "einheit": "wochen", "mindestabstand": 3}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
