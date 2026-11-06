@@ -91,7 +91,7 @@ Danach geht jedes weitere Aufspielen über WLAN direkt aus ESPHome (**Install** 
 - Zuoberst steht die Zeile **Staubsaugen** (nur wenn in der Haushalt-Integration ein Staubsauger gewählt ist). Drücken öffnet **Ganze Wohnung**, **Einzelne Zimmer** und **Sauger reinigen**. Danach Startzeit wählen und die Rückfrage mit **Ja** bestätigen. Bei einzelnen Zimmern erscheint der Grundriss: Drehen springt von Zimmer zu Zimmer, Drücken markiert es schwarz, nach dem letzten Zimmer kommen **Weiter** und **Zurück**, dann wieder das erste Zimmer.
 - Läuft oder wartet der Staubsauger, zeigt die Zeile das an. Drücken bietet dann **Pausieren**/**Fortsetzen**, **Abbrechen** (zurück zur Station) und **Zurück**.
 - Der Grundriss und die Raum-IDs stehen in `grundriss.h`. Für eine andere Wohnung dort anpassen.
-- Ganz unten steht **+ Neue Aufgabe**. Drücken zeigt einen QR-Code, der am Handy die Haushalt-Seite in Home Assistant öffnet.
+- Ganz unten steht **+ Neue Aufgabe**. Drücken zeigt einen QR-Code, der am Handy das Dashboard „Neue Aufgabe“ öffnet (Einrichtung siehe README, Abschnitt „Aufgaben ohne Administratorrechte anlegen“). Die Adresse steht in der Gerätekonfiguration unter `substitutions:` als `neue_aufgabe_url`. Ohne Eintrag öffnet der QR-Code die Haushalt-Seite in HA, die nur Administratoren bedienen können.
 - Ohne Drehregler geht dasselbe in Home Assistant: Das Gerät hat die Tasten **Hoch**, **Runter** und **Drücken**.
 - 10 Sekunden ohne Bedienung brechen eine offene Auswahl ab, nach 30 Sekunden verschwindet der Pfeil.
 - Ohne Bedienung aktualisiert sich das Display alle 15 Minuten und wenn sich in Home Assistant etwas ändert. Von 23 bis 6 Uhr bleibt es stehen.

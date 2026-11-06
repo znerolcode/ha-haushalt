@@ -139,11 +139,84 @@
       },
       "wetter": {
         "name": "Display-Wetter"
+      },
+      "neue_aufgabe_meldung": {
+        "name": "Zuletzt angelegt"
       }
     },
     "button": {
       "erledigt": {
         "name": "Erledigt"
+      },
+      "neue_aufgabe_anlegen": {
+        "name": "Anlegen"
+      }
+    },
+    "text": {
+      "neue_aufgabe_name": {
+        "name": "Name"
+      },
+      "neue_aufgabe_weitere": {
+        "name": "Weitere einzelne Termine"
+      }
+    },
+    "select": {
+      "neue_aufgabe_typ": {
+        "name": "Typ",
+        "state": {
+          "intervall": "Intervall",
+          "wochentag": "Wochentag",
+          "termin": "Termin"
+        }
+      },
+      "neue_aufgabe_frist": {
+        "name": "Frist",
+        "state": {
+          "morgen": "Morgen",
+          "abend": "Abend"
+        }
+      }
+    },
+    "number": {
+      "neue_aufgabe_tage": {
+        "name": "Alle wie viele Tage"
+      },
+      "neue_aufgabe_alle_wochen": {
+        "name": "Alle X Wochen"
+      },
+      "neue_aufgabe_mindestabstand": {
+        "name": "Mindestabstand in Tagen"
+      }
+    },
+    "switch": {
+      "neue_aufgabe_mo": {
+        "name": "Montag"
+      },
+      "neue_aufgabe_di": {
+        "name": "Dienstag"
+      },
+      "neue_aufgabe_mi": {
+        "name": "Mittwoch"
+      },
+      "neue_aufgabe_do": {
+        "name": "Donnerstag"
+      },
+      "neue_aufgabe_fr": {
+        "name": "Freitag"
+      },
+      "neue_aufgabe_sa": {
+        "name": "Samstag"
+      },
+      "neue_aufgabe_so": {
+        "name": "Sonntag"
+      }
+    },
+    "date": {
+      "neue_aufgabe_datum": {
+        "name": "Ab Datum"
+      },
+      "neue_aufgabe_zuletzt": {
+        "name": "Zuletzt erledigt am"
       }
     }
   },
@@ -192,6 +265,18 @@
     },
     "kein_reinigungspunkt": {
       "message": "In den Haushalt-Einstellungen ist kein Reinigungspunkt eingetragen."
+    },
+    "kein_name": {
+      "message": "Bitte einen Namen eingeben."
+    },
+    "kein_wochentag": {
+      "message": "Bitte mindestens einen Wochentag wählen."
+    },
+    "ungueltige_daten": {
+      "message": "Die weiteren Termine bitte als TT.MM.JJJJ, mit Komma getrennt."
+    },
+    "kein_termin": {
+      "message": "Bitte einen ersten Termin oder weitere einzelne Termine angeben."
     }
   }
 }

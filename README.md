@@ -25,6 +25,16 @@ Anzeigetexte: Intervall und Wochentag „in 4 Tagen“, „morgen“, „heute�
 
 Unter **Einstellungen → Geräte & Dienste → Haushalt** auf **Aufgabe hinzufügen** klicken. Bestehende Aufgaben lassen sich dort über ⋮ → **Neu konfigurieren** ändern oder löschen.
 
+### Aufgaben ohne Administratorrechte anlegen
+
+Die Haushalt-Seite unter Geräte & Dienste können nur Administratoren bedienen. Für alle anderen Konten bringt die Integration ein Formular als Gerät **Neue Aufgabe** mit (Felder wie `text.neue_aufgabe_name`, `select.neue_aufgabe_typ` und der Knopf `button.neue_aufgabe_anlegen`). Dazu gehört die Dashboard-Vorlage [`dashboard/neue-aufgabe.yaml`](dashboard/neue-aufgabe.yaml), die je nach Typ nur die passenden Felder zeigt:
+
+1. **Einstellungen → Dashboards → Dashboard hinzufügen → Neues Dashboard von Grund auf**, Titel „Neue Aufgabe“, URL `neue-aufgabe`, **Nur für Administratoren** aus.
+2. Dashboard öffnen, Stift → ⋮ → **Raw-Konfigurationseditor**, alles durch den Inhalt der Vorlage ersetzen, speichern.
+3. Die Seite heisst dann `http://<adresse-deines-ha>:8123/neue-aufgabe/neu`. Diese Adresse fürs Flur-Display als `neue_aufgabe_url` eintragen (siehe `esphome/ANLEITUNG.md`).
+
+Nach **Aufgabe anlegen** ist das Formular wieder leer, darunter steht die zuletzt angelegte Aufgabe. Fehlt etwas (Name, Wochentag, Termin), erscheint unten ein Hinweis. Ändern und löschen bleibt Administratoren vorbehalten.
+
 Termin-Aufgaben: Das erste Datum bestimmt den Wochentag, „alle X Wochen“ die Wiederholung. Unregelmässige Termine (z.B. aus dem Abfuhrkalender) trägst du unter „Weitere einzelne Termine“ ein: `05.11.2026, 19.11.2026`.
 
 
@@ -37,6 +47,7 @@ Optional wählst du unter **Konfigurieren** auch einen **Staubsauger** (getestet
 ## Entitäten
 
 - Pro Aufgabe ein Sensor **Fälligkeit** (Zustand z.B. „in 4 Tagen“, Attribute `faellig_am`, `tage`, `gruppe`, `aufgabe_id`) und ein Knopf **Erledigt**.
+- Gerät **Neue Aufgabe**: Formularfelder `text.neue_aufgabe_name`, `select.neue_aufgabe_typ`, `number.neue_aufgabe_tage`, `date.neue_aufgabe_zuletzt`, `switch.neue_aufgabe_mo` … `_so`, `number.neue_aufgabe_alle_wochen`, `number.neue_aufgabe_mindestabstand`, `date.neue_aufgabe_datum`, `select.neue_aufgabe_frist`, `text.neue_aufgabe_weitere`, Knopf `button.neue_aufgabe_anlegen` und `sensor.neue_aufgabe_meldung` (zuletzt angelegte Aufgabe). Die Werte gelten nur bis zum Anlegen oder bis zum Neustart.
 - `sensor.aufgaben`: Anzahl sichtbarer Aufgaben. Attribut `aufgaben` als Liste, Attribut `anzeige` als Text für das Display, eine Zeile pro Aufgabe: `aufgabe_id|gruppe|name|text|ueberfaellig` (`ueberfaellig` 0 oder 1). Attribut `sauger` (nur mit Staubsauger, sonst leer): `zustand|uhrzeit|zimmer`, z.B. `geplant|17:05|19,20` oder `saugt||`. Zustände: `bereit`, `geplant`, `saugt`, `pausiert`, `zurueck`, `reinigen`, `steht`, `fehler`.
 - `sensor.display_wetter` (nur mit Wetter-Entität): Zustand ist das Wetter des aktuellen Halbtags. Attribut `tage` als Liste, Attribut `anzeige` als Text, eine Zeile pro Tag: `tag|zustand|temperatur|regen|menge|zustand|temperatur|regen|menge|tiefst|tiefst` (erst Vormittag, dann Nachmittag; die beiden Tiefstwerte in °C stehen am Schluss). `zustand` ist ein Wetterzustand von Home Assistant (`sunny`, `rainy`, …), `temperatur` die höchste Temperatur in °C, `regen` die höchste Regenwahrscheinlichkeit (`40 %`), `menge` die Niederschlagsmenge (`1,2 mm`, leer bei 0). Fehlende Werte bleiben leer. Für den Zustand zählt der häufigste der Stunden, bei Gleichstand der schlechtere. Fehlen stündliche Daten, kommen die Werte aus der Tagesvorhersage.
 

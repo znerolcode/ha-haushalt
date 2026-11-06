@@ -139,11 +139,84 @@
       },
       "wetter": {
         "name": "Display-Wetter"
+      },
+      "neue_aufgabe_meldung": {
+        "name": "Last created"
       }
     },
     "button": {
       "erledigt": {
         "name": "Erledigt"
+      },
+      "neue_aufgabe_anlegen": {
+        "name": "Create"
+      }
+    },
+    "text": {
+      "neue_aufgabe_name": {
+        "name": "Name"
+      },
+      "neue_aufgabe_weitere": {
+        "name": "Additional single dates"
+      }
+    },
+    "select": {
+      "neue_aufgabe_typ": {
+        "name": "Type",
+        "state": {
+          "intervall": "Interval",
+          "wochentag": "Weekday",
+          "termin": "Deadline"
+        }
+      },
+      "neue_aufgabe_frist": {
+        "name": "Deadline",
+        "state": {
+          "morgen": "Morning",
+          "abend": "Evening"
+        }
+      }
+    },
+    "number": {
+      "neue_aufgabe_tage": {
+        "name": "Every how many days"
+      },
+      "neue_aufgabe_alle_wochen": {
+        "name": "Every X weeks"
+      },
+      "neue_aufgabe_mindestabstand": {
+        "name": "Minimum gap in days"
+      }
+    },
+    "switch": {
+      "neue_aufgabe_mo": {
+        "name": "Monday"
+      },
+      "neue_aufgabe_di": {
+        "name": "Tuesday"
+      },
+      "neue_aufgabe_mi": {
+        "name": "Wednesday"
+      },
+      "neue_aufgabe_do": {
+        "name": "Thursday"
+      },
+      "neue_aufgabe_fr": {
+        "name": "Friday"
+      },
+      "neue_aufgabe_sa": {
+        "name": "Saturday"
+      },
+      "neue_aufgabe_so": {
+        "name": "Sunday"
+      }
+    },
+    "date": {
+      "neue_aufgabe_datum": {
+        "name": "From date"
+      },
+      "neue_aufgabe_zuletzt": {
+        "name": "Last done on"
       }
     }
   },
@@ -192,6 +265,18 @@
     },
     "kein_reinigungspunkt": {
       "message": "In den Haushalt-Einstellungen ist kein Reinigungspunkt eingetragen."
+    },
+    "kein_name": {
+      "message": "Please enter a name."
+    },
+    "kein_wochentag": {
+      "message": "Please choose at least one weekday."
+    },
+    "ungueltige_daten": {
+      "message": "Please enter the additional dates as DD.MM.YYYY, separated by commas."
+    },
+    "kein_termin": {
+      "message": "Please enter a first date or additional single dates."
     }
   }
 }

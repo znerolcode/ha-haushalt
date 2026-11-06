@@ -29,6 +29,8 @@ captive_portal:
 # Dieser Teil kommt dazu:
 substitutions:
   innen_temperatur: sensor.flur_temperatur  # deinen Temperatursensor eintragen
+  # QR-Code "+ Neue Aufgabe" auf das Dashboard "Neue Aufgabe" (Adresse deines HA)
+  neue_aufgabe_url: http://homeassistant.local:8123/neue-aufgabe/neu
 
 packages:
   flur_display:

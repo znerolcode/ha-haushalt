@@ -5,6 +5,10 @@
 substitutions:
   # Sensor für die Innentemperatur in der Kopfzeile, in der Gerätekonfiguration überschreiben
   innen_temperatur: sensor.flur_temperatur
+  # Ziel des QR-Codes bei "+ Neue Aufgabe". Ohne Änderung öffnet er die Haushalt-Seite
+  # in HA (nur für Administratoren). Für alle Konten: Adresse des Dashboards
+  # "Neue Aufgabe" eintragen, z.B. http://192.168.178.10:8123/neue-aufgabe/neu
+  neue_aufgabe_url: https://my.home-assistant.io/redirect/integration/?domain=haushalt
 
 # Angepasster Display-Treiber aus diesem Repository: sendet das Bild in einem Stück
 # statt Byte für Byte (sonst dauert jeder Schritt mehrere Sekunden)
@@ -241,7 +245,7 @@ spi:
 
 qr_code:
   - id: qr_neue_aufgabe
-    value: https://my.home-assistant.io/redirect/integration/?domain=haushalt
+    value: ${neue_aufgabe_url}
 
 font:
   - file: "gfonts://Inter@700"

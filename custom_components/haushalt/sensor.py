@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import HaushaltConfigEntry
 from .entity import AufgabeEntity, HaushaltEntity
+from .formular import FormularEntity
 from .logic import Status
 
 
@@ -20,7 +21,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     manager = entry.runtime_data
-    async_add_entities([ListeSensor(manager, entry.entry_id)])
+    async_add_entities([ListeSensor(manager, entry.entry_id), MeldungSensor(manager)])
     if manager.wetter is not None:
         async_add_entities([WetterSensor(manager, entry.entry_id)])
     for aufgabe_id in manager.aufgaben:
@@ -128,3 +129,20 @@ class WetterSensor(HaushaltEntity, SensorEntity):
             ],
             "anzeige": wetter.anzeige,
         }
+
+
+class MeldungSensor(FormularEntity, SensorEntity):
+    """Zuletzt über das Formular angelegte Aufgabe, als Bestätigung im Dashboard."""
+
+    _attr_icon = "mdi:check"
+
+    def __init__(self, manager) -> None:
+        self._formular_init(manager, "sensor", "meldung")
+
+    @property
+    def native_value(self) -> str | None:
+        return self.manager.formular_meldung.get("name")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"zeit": self.manager.formular_meldung.get("zeit")}
