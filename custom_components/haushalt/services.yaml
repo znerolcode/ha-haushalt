@@ -5,6 +5,14 @@ erledigt:
       example: "01JABCDEF..."
       selector:
         text:
+
+saugen:
+  fields:
+    zimmer:
+      required: false
+      example: "19,20"
+      selector:
+        text:
     start_in_min:
       required: false
       example: 20
@@ -15,3 +23,15 @@ erledigt:
             - "5"
             - "20"
             - "60"
+
+sauger:
+  fields:
+    aktion:
+      required: true
+      selector:
+        select:
+          options:
+            - pausieren
+            - fortsetzen
+            - abbrechen
+            - reinigen

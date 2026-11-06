@@ -2,31 +2,33 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, time, timedelta
 import logging
 
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import (
-    async_track_point_in_time,
-    async_track_time_interval,
-)
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    AKTIONEN,
+    ATTR_AKTION,
     ATTR_AUFGABE_ID,
     ATTR_START_IN_MIN,
+    ATTR_ZIMMER,
     CONF_ALLE_WOCHEN,
     CONF_DATEN,
     CONF_FRIST,
+    CONF_REINIGUNG_X,
+    CONF_REINIGUNG_Y,
     CONF_STARTDATUM,
     CONF_STAUBSAUGER,
     CONF_TAGE,
@@ -44,8 +46,9 @@ from .const import (
     DOMAIN,
     EVENT_ERLEDIGT,
     FRIST_ABEND,
-    NACHHOLEN_MAX_MIN,
     SERVICE_ERLEDIGT,
+    SERVICE_SAUGEN,
+    SERVICE_SAUGER,
     SIGNAL_UPDATE,
     START_OPTIONEN,
     SUBENTRY_AUFGABE,
@@ -64,6 +67,7 @@ from .logic import (
     naechster_termin,
     parse_daten,
 )
+from .sauger import Sauger
 from .wetter import WetterDienst
 
 _LOGGER = logging.getLogger(__name__)
@@ -87,7 +91,6 @@ def aufgabe_aus_subentry(subentry_id: str, title: str, data: dict) -> Aufgabe:
         wochentage=sorted(WOCHENTAGE.index(t) for t in data.get(CONF_WOCHENTAGE, [])),
         mindestabstand=int(data.get(CONF_MINDESTABSTAND, 3)),
         daten=parse_daten(data.get(CONF_DATEN)),
-        staubsauger=data.get(CONF_STAUBSAUGER) or None,
     )
 
 
@@ -101,16 +104,16 @@ class HaushaltManager:
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}"
         )
         # zuletzt: {aufgabe_id: iso-datum}, erledigt: {aufgabe_id: [iso-datum, ...]},
-        # saugstart: {aufgabe_id: iso-zeitpunkt},
         # erstellt: {aufgabe_id: iso-datum} für noch nie erledigte Wochentag-Aufgaben,
-        # wetter: Zwischenspeicher für den heutigen Vormittag
+        # wetter: Zwischenspeicher für den heutigen Vormittag,
+        # sauger: geplanter Start und laufender Auftrag des Staubsaugers
         self._daten: dict = {
-            "zuletzt": {}, "erledigt": {}, "saugstart": {}, "erstellt": {}, "wetter": {}
+            "zuletzt": {}, "erledigt": {}, "erstellt": {}, "wetter": {}, "sauger": {}
         }
         self.aufgaben: dict[str, Aufgabe] = {}
         self.stati: dict[str, Status] = {}
-        self._saug_timer: dict[str, CALLBACK_TYPE] = {}
         self.wetter: WetterDienst | None = None
+        self.sauger: Sauger | None = None
 
     @property
     def signal(self) -> str:
@@ -137,11 +140,24 @@ class HaushaltManager:
             self._daten = gespeichert
         self._daten.setdefault("zuletzt", {})
         self._daten.setdefault("erledigt", {})
-        self._daten.setdefault("saugstart", {})
         self._daten.setdefault("erstellt", {})
         self._daten.setdefault("wetter", {})
+        self._daten.setdefault("sauger", {})
+        # Saugstarts pro Aufgabe gibt es nicht mehr (bis 0.4)
+        self._daten.pop("saugstart", None)
         if wetter_id := self.entry.options.get(CONF_WETTER):
             self.wetter = WetterDienst(self.hass, wetter_id, self._daten["wetter"])
+        if sauger_id := self.entry.options.get(CONF_STAUBSAUGER):
+            x = self.entry.options.get(CONF_REINIGUNG_X)
+            y = self.entry.options.get(CONF_REINIGUNG_Y)
+            punkt = (int(x), int(y)) if x is not None and y is not None else None
+            self.sauger = Sauger(
+                self.hass, sauger_id, punkt, self._daten["sauger"],
+                self._async_speichern, self.aktualisieren,
+            )
+            self.sauger.starten()
+        else:
+            self._daten["sauger"] = {}
 
         heute = dt_util.now().date()
         for subentry in self.entry.subentries.values():
@@ -169,11 +185,10 @@ class HaushaltManager:
                     self._daten["erstellt"][aufgabe.id] = heute.isoformat()
 
         # Daten gelöschter Aufgaben entfernen
-        for schluessel in ("zuletzt", "erledigt", "saugstart", "erstellt"):
+        for schluessel in ("zuletzt", "erledigt", "erstellt"):
             for aufgabe_id in list(self._daten[schluessel]):
                 if aufgabe_id not in self.aufgaben:
                     del self._daten[schluessel][aufgabe_id]
-        self._saugstarts_wiederherstellen()
         await self._store.async_save(self._daten)
         self.berechnen()
 
@@ -229,9 +244,10 @@ class HaushaltManager:
             await self._store.async_save(self._daten)
         async_dispatcher_send(self.hass, self.signal)
 
-    async def async_erledigt(
-        self, aufgabe_id: str, start_in_min: int | None = None
-    ) -> None:
+    async def _async_speichern(self) -> None:
+        await self._store.async_save(self._daten)
+
+    async def async_erledigt(self, aufgabe_id: str) -> None:
         aufgabe = self.aufgaben.get(aufgabe_id)
         if aufgabe is None:
             raise ServiceValidationError(
@@ -253,93 +269,20 @@ class HaushaltManager:
             # Nur die jüngsten Einträge behalten, ältere sind vorbei
             neu = sorted(erledigt | {datum})[-10:]
             self._daten["erledigt"][aufgabe_id] = [d.isoformat() for d in neu]
-        if aufgabe.staubsauger:
-            if start_in_min is None:
-                start_in_min = 0
-            if start_in_min:
-                self._saugstart_planen(
-                    aufgabe_id, jetzt + timedelta(minutes=start_in_min)
-                )
-            else:
-                self._saug_timer_stoppen(aufgabe_id)
-                self._daten["saugstart"].pop(aufgabe_id, None)
         await self._store.async_save(self._daten)
         self.hass.bus.async_fire(
             EVENT_ERLEDIGT,
             {
                 ATTR_AUFGABE_ID: aufgabe_id,
                 "name": aufgabe.name,
-                ATTR_START_IN_MIN: start_in_min,
             },
         )
         self.aktualisieren()
-        if aufgabe.staubsauger and not start_in_min:
-            await self._async_saugen(aufgabe_id)
-
-    def saugstart(self, aufgabe_id: str) -> datetime | None:
-        """Geplanter Start des Staubsaugers, falls einer ansteht."""
-        if wert := self._daten["saugstart"].get(aufgabe_id):
-            return datetime.fromisoformat(wert)
-        return None
 
     @callback
-    def _saugstart_planen(self, aufgabe_id: str, zeitpunkt: datetime) -> None:
-        self._saug_timer_stoppen(aufgabe_id)
-        self._daten["saugstart"][aufgabe_id] = zeitpunkt.isoformat()
-
-        async def _faellig(_jetzt: datetime) -> None:
-            self._saug_timer.pop(aufgabe_id, None)
-            await self._async_saugen(aufgabe_id)
-
-        self._saug_timer[aufgabe_id] = async_track_point_in_time(
-            self.hass, _faellig, zeitpunkt
-        )
-
-    @callback
-    def _saug_timer_stoppen(self, aufgabe_id: str) -> None:
-        if abbrechen := self._saug_timer.pop(aufgabe_id, None):
-            abbrechen()
-
-    @callback
-    def timer_stoppen(self) -> None:
-        for aufgabe_id in list(self._saug_timer):
-            self._saug_timer_stoppen(aufgabe_id)
-
-    @callback
-    def _saugstarts_wiederherstellen(self) -> None:
-        """Nach einem Neustart die offenen Saugstarts wieder planen."""
-        jetzt = dt_util.now()
-        for aufgabe_id, wert in list(self._daten["saugstart"].items()):
-            aufgabe = self.aufgaben[aufgabe_id]
-            zeitpunkt = datetime.fromisoformat(wert)
-            if not aufgabe.staubsauger or zeitpunkt < jetzt - timedelta(
-                minutes=NACHHOLEN_MAX_MIN
-            ):
-                del self._daten["saugstart"][aufgabe_id]
-                continue
-            # Etwas Luft lassen, damit der Staubsauger nach dem Start von HA bereit ist
-            self._saugstart_planen(
-                aufgabe_id, max(zeitpunkt, jetzt + timedelta(minutes=1))
-            )
-
-    async def _async_saugen(self, aufgabe_id: str) -> None:
-        self._daten["saugstart"].pop(aufgabe_id, None)
-        await self._store.async_save(self._daten)
-        self.aktualisieren()
-        staubsauger = self.aufgaben[aufgabe_id].staubsauger
-        try:
-            await self.hass.services.async_call(
-                "vacuum", "start", {"entity_id": staubsauger}, blocking=True
-            )
-        except HomeAssistantError as err:
-            _LOGGER.error("%s konnte nicht gestartet werden: %s", staubsauger, err)
-
-    async def async_saugstart_abbrechen(self, aufgabe_id: str) -> None:
-        self._saug_timer_stoppen(aufgabe_id)
-        if self._daten["saugstart"].pop(aufgabe_id, None) is None:
-            return
-        await self._store.async_save(self._daten)
-        self.aktualisieren()
+    def stoppen(self) -> None:
+        if self.sauger is not None:
+            self.sauger.stoppen()
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HaushaltConfigEntry) -> bool:
@@ -350,7 +293,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HaushaltConfigEntry) -> 
     entry.async_on_unload(
         async_track_time_interval(hass, manager.aktualisieren, timedelta(minutes=1))
     )
-    entry.async_on_unload(manager.timer_stoppen)
+    entry.async_on_unload(manager.stoppen)
     if manager.wetter is not None:
         entry.async_on_unload(
             async_track_time_interval(
@@ -388,13 +331,47 @@ def _service_registrieren(hass: HomeAssistant) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_ERLEDIGT):
         return
 
+    def _manager_mit_sauger() -> HaushaltManager:
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN):
+            if entry.runtime_data.sauger is not None:
+                return entry.runtime_data
+        raise ServiceValidationError(
+            translation_domain=DOMAIN, translation_key="kein_staubsauger"
+        )
+
+    async def saugen(call: ServiceCall) -> None:
+        await _manager_mit_sauger().sauger.async_saugen(
+            call.data.get(ATTR_ZIMMER, []), call.data.get(ATTR_START_IN_MIN, 0)
+        )
+
+    async def sauger(call: ServiceCall) -> None:
+        await _manager_mit_sauger().sauger.async_aktion(call.data[ATTR_AKTION])
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SAUGEN,
+        saugen,
+        schema=vol.Schema(
+            {
+                vol.Optional(ATTR_ZIMMER, default=[]): _zimmer_liste,
+                vol.Optional(ATTR_START_IN_MIN, default=0): vol.All(
+                    vol.Coerce(int), vol.In(START_OPTIONEN)
+                ),
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SAUGER,
+        sauger,
+        schema=vol.Schema({vol.Required(ATTR_AKTION): vol.In(AKTIONEN)}),
+    )
+
     async def erledigt(call: ServiceCall) -> None:
         aufgabe_id = call.data[ATTR_AUFGABE_ID]
         for entry in hass.config_entries.async_loaded_entries(DOMAIN):
             if aufgabe_id in entry.runtime_data.aufgaben:
-                await entry.runtime_data.async_erledigt(
-                    aufgabe_id, call.data.get(ATTR_START_IN_MIN)
-                )
+                await entry.runtime_data.async_erledigt(aufgabe_id)
                 return
         raise ServiceValidationError(
             translation_domain=DOMAIN,
@@ -409,9 +386,19 @@ def _service_registrieren(hass: HomeAssistant) -> None:
         schema=vol.Schema(
             {
                 vol.Required(ATTR_AUFGABE_ID): cv.string,
-                vol.Optional(ATTR_START_IN_MIN): vol.All(
-                    vol.Coerce(int), vol.In(START_OPTIONEN)
-                ),
+                # Früher für den Saugstart, wird ignoriert (ältere Display-Firmware)
+                vol.Optional(ATTR_START_IN_MIN): cv.string,
             }
         ),
     )
+
+
+def _zimmer_liste(wert) -> list[int]:
+    """Zimmer als Liste oder als Text '19,20' (so schickt es das Display)."""
+    if wert is None or wert == "":
+        return []
+    if isinstance(wert, str):
+        wert = [t for t in wert.replace(" ", "").split(",") if t]
+    if not isinstance(wert, list):
+        wert = [wert]
+    return [vol.Coerce(int)(z) for z in wert]

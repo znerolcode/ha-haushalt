@@ -35,8 +35,6 @@ class Aufgabe:
     startdatum: date | None = None
     alle_wochen: int = 0
     daten: list[date] = field(default_factory=list)
-    # Staubsauger, der nach dem Abhaken startet (Entity-ID)
-    staubsauger: str | None = None
     # Wochentag (0 = Montag); startdatum legt bei alle_wochen > 1 die Woche fest
     wochentage: list[int] = field(default_factory=list)
     mindestabstand: int = 3
@@ -251,14 +249,13 @@ def berechne_termin(
 def anzeige_zeilen(stati: list[Status]) -> str:
     """Kompakte Liste für das Display: eine Zeile pro Aufgabe, Felder mit '|' getrennt.
 
-    id|gruppe|name|text|ueberfaellig(0/1)|startzeit_auswahl(0/1)
+    id|gruppe|name|text|ueberfaellig(0/1)
     """
     zeilen = []
     for s in sorted((s for s in stati if s.sichtbar), key=Status.sortierschluessel):
         name = s.aufgabe.name.replace("|", "/").replace("\n", " ")
         zeilen.append(
             f"{s.aufgabe.id}|{s.gruppe}|{name}|{s.text}|{1 if s.ueberfaellig else 0}"
-            f"|{1 if s.aufgabe.staubsauger else 0}"
         )
     return "\n".join(zeilen)
 

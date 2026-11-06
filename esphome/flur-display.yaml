@@ -23,6 +23,7 @@ esp32:
 
 esphome:
   includes:
+    - grundriss.h
     - flur_display.h
   on_boot:
     priority: -100
@@ -55,11 +56,13 @@ text_sensor:
     attribute: anzeige
     on_value:
       - script.execute: daten_neu
+  # Staubsauger-Zeile: zustand|uhrzeit|zimmer, leer ohne Staubsauger in der Integration
   - platform: homeassistant
-    id: saugstart
+    id: sauger
     entity_id: sensor.aufgaben
-    attribute: saugstart
+    attribute: sauger
     on_value:
+      - lambda: 'flur::sauger_roh = x;'
       - script.execute: daten_neu
   - platform: homeassistant
     id: wetter
@@ -153,7 +156,7 @@ globals:
     initial_value: 'true'
 
 script:
-  # Knopf gedrückt: abhaken bzw. Auswahl bestätigen
+  # Knopf gedrückt: abhaken, Auswahl bestätigen oder Staubsauger steuern
   - id: druecken
     then:
       - lambda: 'flur::druecken(id(aufgaben).state);'
@@ -165,8 +168,25 @@ script:
                 action: haushalt.erledigt
                 data:
                   aufgabe_id: !lambda 'return flur::senden_id;'
-                  start_in_min: !lambda 'return to_string(flur::senden_min);'
             - lambda: 'flur::senden = false;'
+      - if:
+          condition:
+            lambda: 'return flur::saug_aktion == "saugen";'
+          then:
+            - homeassistant.action:
+                action: haushalt.saugen
+                data:
+                  zimmer: !lambda 'return flur::saug_zimmer;'
+                  start_in_min: !lambda 'return to_string(flur::saug_min);'
+      - if:
+          condition:
+            lambda: 'return !flur::saug_aktion.empty() && flur::saug_aktion != "saugen";'
+          then:
+            - homeassistant.action:
+                action: haushalt.sauger
+                data:
+                  aktion: !lambda 'return flur::saug_aktion;'
+      - lambda: 'flur::saug_aktion.clear();'
       - script.execute: nach_eingabe
   # Zeichnen, bei Bedarf als voller Aufbau
   - id: zeichnen
@@ -190,7 +210,7 @@ script:
       - delay: 10s
       - if:
           condition:
-            lambda: 'return flur::modus == flur::BESTAETIGEN || flur::modus == flur::AUSWAHL;'
+            lambda: 'return flur::auswahl_offen();'
           then:
             - lambda: 'flur::auswahl_abbrechen();'
             - component.update: epaper
@@ -365,6 +385,96 @@ display:
       }
       it.filled_rectangle(0, 56, B, 3, SCHWARZ);
 
+      // ---- Knöpfe nebeneinander, der gewählte schwarz ----
+      auto knoepfe = [&](int x, int y, int breite, const std::vector<std::string> &namen, int aktiv) {
+        int k = namen.size();
+        int ob = (breite - (k - 1) * 8) / k;
+        for (int o = 0; o < k; o++) {
+          int ox = x + o * (ob + 8);
+          if (o == aktiv) {
+            it.filled_rectangle(ox, y, ob, 32, SCHWARZ);
+            it.print(ox + ob / 2, y + 16, id(f_option), WEISS, TextAlign::CENTER, namen[o].c_str());
+          } else {
+            it.rectangle(ox, y, ob, 32, SCHWARZ);
+            it.rectangle(ox + 1, y + 1, ob - 2, 30, SCHWARZ);
+            it.print(ox + ob / 2, y + 16, id(f_option), SCHWARZ, TextAlign::CENTER, namen[o].c_str());
+          }
+        }
+      };
+      auto rahmen = [&](int x, int y, int b, int h) {
+        for (int d = 0; d < 3; d++) it.rectangle(x + d, y + d, b - 2 * d, h - 2 * d, SCHWARZ);
+      };
+
+      // ---- Zimmer im Grundriss wählen ----
+      if (modus == ZIMMER) {
+        const int GX = 40, GY = 74, GH = 392;
+        const float M = (float) GH / PLAN_H;
+        auto px = [&](int v) { return GX + (int) ((v - PLAN_X) * M + 0.5f); };
+        auto py = [&](int v) { return GY + (int) ((v - PLAN_Y) * M + 0.5f); };
+        for (int i = 0; i < ANZAHL_ZIMMER; i++) {
+          const auto &z = ZIMMER_LISTE[i];
+          bool an = std::find(gewaehlt.begin(), gewaehlt.end(), z.id) != gewaehlt.end();
+          bool hier = i == zimmer_cursor;
+          int r = hier ? 5 : 2;
+          for (int t = 0; t < z.anzahl; t++) {
+            const auto &q = z.teile[t];
+            it.filled_rectangle(px(q.x), py(q.y), px(q.x + q.b) - px(q.x), py(q.y + q.h) - py(q.y), SCHWARZ);
+          }
+          if (!an) {
+            for (int t = 0; t < z.anzahl; t++) {
+              const auto &q = z.teile[t];
+              it.filled_rectangle(px(q.x) + r, py(q.y) + r, px(q.x + q.b) - px(q.x) - 2 * r, py(q.y + q.h) - py(q.y) - 2 * r, WEISS);
+            }
+            // Naht zwischen zwei Teilen desselben Zimmers wieder weiss machen
+            if (z.anzahl == 2) {
+              const auto &a = z.teile[0], &c = z.teile[1];
+              if (a.x + a.b == c.x || c.x + c.b == a.x) {
+                int kx = px(a.x + a.b == c.x ? c.x : a.x);
+                int y0 = py(std::max(a.y, c.y)) + r, y1 = py(std::min(a.y + a.h, c.y + c.h)) - r;
+                it.filled_rectangle(kx - r, y0, 2 * r, y1 - y0, WEISS);
+              } else {
+                int ky = py(a.y + a.h == c.y ? c.y : a.y);
+                int x0 = px(std::max(a.x, c.x)) + r, x1 = px(std::min(a.x + a.b, c.x + c.b)) - r;
+                it.filled_rectangle(x0, ky - r, x1 - x0, 2 * r, WEISS);
+              }
+            }
+          }
+          // Punkt in der Mitte zeigt, wo der Regler gerade steht
+          if (hier) {
+            const auto &q = z.teile[0];
+            int mx = px(q.x + q.b / 2), my = py(q.y + q.h / 2);
+            it.filled_circle(mx, my, 9, an ? WEISS : SCHWARZ);
+          }
+        }
+        const int RX = 330;
+        it.print(RX, 78, id(f_qr_titel), SCHWARZ, TextAlign::TOP_LEFT, "Zimmer wählen");
+        it.print(RX, 120, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Drehen wählt, Drücken markiert.");
+        it.print(RX, 144, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Markierte Zimmer sind schwarz.");
+        it.print(RX, 190, id(f_gruppe), SCHWARZ, TextAlign::TOP_LEFT, "GEWÄHLT");
+        std::string g = gewaehlt.empty() ? std::string("noch keines") : zimmer_text(gewaehlt);
+        it.print(RX, 208, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, kuerzen(id(f_text), g, B - 20 - RX).c_str());
+        if (zimmer_cursor < ANZAHL_ZIMMER) {
+          it.print(RX, 246, id(f_gruppe), SCHWARZ, TextAlign::TOP_LEFT, "REGLER STEHT AUF");
+          it.print(RX, 264, id(f_datum), SCHWARZ, TextAlign::TOP_LEFT, ZIMMER_LISTE[zimmer_cursor].name);
+        }
+        static const char *KNOPF[] = {"Weiter", "Zurück"};
+        for (int o = 0; o < 2; o++) {
+          int oy = 318 + o * 46;
+          if (zimmer_cursor == ANZAHL_ZIMMER + o) {
+            it.filled_rectangle(RX, oy, 220, 38, SCHWARZ);
+            it.print(RX + 110, oy + 19, id(f_option), WEISS, TextAlign::CENTER, KNOPF[o]);
+          } else {
+            it.rectangle(RX, oy, 220, 38, SCHWARZ);
+            it.rectangle(RX + 1, oy + 1, 218, 36, SCHWARZ);
+            it.print(RX + 110, oy + 19, id(f_option), SCHWARZ, TextAlign::CENTER, KNOPF[o]);
+          }
+        }
+        if (zimmer_hinweis)
+          it.print(RX + 236, 337, id(f_hinweis), SCHWARZ, TextAlign::CENTER_LEFT, "Erst ein Zimmer wählen");
+        it.print(RX, 440, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, "Weiter und Zurück kommen nach dem letzten Zimmer");
+        return;
+      }
+
       // ---- QR-Code für neue Aufgaben ----
       if (modus == QR) {
         it.qr_code(150, 120, id(qr_neue_aufgabe), SCHWARZ, 6);
@@ -380,21 +490,96 @@ display:
       // ---- Spalten ----
       const int LINKS_B = 470;
       it.filled_rectangle(LINKS_B, 59, 3, 480 - 59, SCHWARZ);
-      it.print(20, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "AUFGABEN");
       it.print(LINKS_B + 21, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "VORMITTAG");
       it.print(LINKS_B + 21 + (800 - 18 - LINKS_B - 21) / 2 + 6, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "NACHMITTAG");
 
-      // ---- Aufgabenliste ----
-      int liste_y = 96;
-      int liste_h = 332;
-      if (!id(saugstart).state.empty()) {
-        it.filled_rectangle(20, liste_y, LINKS_B - 36, 46, SCHWARZ);
-        it.print(32, liste_y + 23, id(f_symbol), WEISS, TextAlign::CENTER_LEFT, "\U000F070D");
-        it.printf(78, liste_y + 4, id(f_hinweis), WEISS, TextAlign::TOP_LEFT, "Staubsauger startet um %s", id(saugstart).state.c_str());
-        it.print(78, liste_y + 26, id(f_klein), WEISS, TextAlign::TOP_LEFT, "ganze Wohnung");
-        liste_y += 52;
-        liste_h -= 52;
+      // ---- Staubsauger-Zeile, immer zuoberst; darunter die Überschrift AUFGABEN ----
+      int oben_y = 70;
+      const int ZB = LINKS_B - 36;  // Breite der Zeilen
+      if (!sauger_roh.empty()) {
+        int liste_y = oben_y;
+        auto s = sauger_lesen();
+        bool gew = cursor == 0;  // die Zeile ist immer der erste Eintrag
+        bool aktiv = s.zustand != "bereit";
+        std::string titel, unter;
+        if (s.zustand == "geplant") { titel = "Staubsauger startet um " + s.zeit; unter = zimmer_text(s.zimmer); }
+        else if (s.zustand == "saugt") { titel = "Staubsauger saugt"; unter = zimmer_text(s.zimmer); }
+        else if (s.zustand == "pausiert") { titel = "Staubsauger pausiert"; unter = zimmer_text(s.zimmer); }
+        else if (s.zustand == "zurueck") { titel = "Staubsauger fährt zur Station"; }
+        else if (s.zustand == "reinigen") { titel = "Staubsauger zum Leeren und Reinigen"; unter = "Fertig? Drücken, dann Zur Station"; }
+        else if (s.zustand == "steht") { titel = "Staubsauger steht"; unter = "nicht in der Station"; }
+        else if (s.zustand == "fehler") { titel = "Staubsauger: Störung"; unter = "Details in der Roborock-App"; }
+        else { titel = "Staubsaugen"; }
+        auto farbe = aktiv ? WEISS : SCHWARZ;
+        // Ruhig: eine Zeile wie eine Aufgabe; aktiv: schwarz, mit Untertitel
+        const int zh = aktiv ? 46 : 38;
+        if (aktiv) {
+          it.filled_rectangle(20, liste_y, ZB, zh, SCHWARZ);
+          if (gew) {
+            it.rectangle(22, liste_y + 2, ZB - 4, zh - 4, WEISS);
+            it.rectangle(23, liste_y + 3, ZB - 6, zh - 6, WEISS);
+          }
+          it.print(32, liste_y + 4, id(f_hinweis), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_hinweis), titel, ZB - 24).c_str());
+          it.print(32, liste_y + 26, id(f_klein), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_klein), unter, ZB - 24).c_str());
+        } else {
+          if (gew) rahmen(20, liste_y, ZB, zh);
+          else it.rectangle(20, liste_y, ZB, zh, SCHWARZ);
+          it.print(32, liste_y + zh / 2, id(f_zeile), farbe, TextAlign::CENTER_LEFT, titel.c_str());
+        }
+        liste_y += zh + 6;
+
+        // Menü direkt unter der Zeile
+        if (gew && saug_modus()) {
+          int my = liste_y, mh = 0;
+          const char *HILFE = "Drehen wählt · Drücken bestätigt · 10 s warten bricht ab";
+          if (modus == SAUG_MENU && saug_menu_senkrecht(s.zustand)) {
+            auto opt = saug_optionen(s.zustand);
+            int k = opt.size();
+            mh = 14 + k * 38 + 18;
+            rahmen(20, my, ZB, mh);
+            for (int o = 0; o < k; o++) {
+              int oy = my + 10 + o * 38;
+              if (o == auswahl) {
+                it.filled_rectangle(32, oy, ZB - 24, 32, SCHWARZ);
+                it.print(46, oy + 16, id(f_option), WEISS, TextAlign::CENTER_LEFT, opt[o].name);
+              } else {
+                it.rectangle(32, oy, ZB - 24, 32, SCHWARZ);
+                it.print(46, oy + 16, id(f_option), SCHWARZ, TextAlign::CENTER_LEFT, opt[o].name);
+              }
+            }
+            it.print(32, my + 12 + k * 38, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
+          } else if (modus == SAUG_MENU) {
+            auto opt = saug_optionen(s.zustand);
+            std::vector<std::string> namen;
+            for (auto &o : opt) namen.push_back(o.name);
+            mh = 72;
+            rahmen(20, my, ZB, mh);
+            knoepfe(32, my + 10, ZB - 24, namen, auswahl);
+            it.print(32, my + 50, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
+          } else {
+            mh = 96;
+            rahmen(20, my, ZB, mh);
+            std::string frage = zimmer_text(gewaehlt);
+            std::vector<std::string> namen;
+            int aktiv_knopf = auswahl;
+            if (modus == SAUG_ZEIT) {
+              frage += " saugen, Start:";
+              for (int o = 0; o < ANZAHL_OPTIONEN; o++) namen.push_back(START_NAMEN[o]);
+            } else {
+              frage += saug_min ? " in " + to_string(saug_min) + " Min saugen?" : " jetzt saugen?";
+              namen = {"Ja", "Zurück"};
+            }
+            it.print(32, my + 8, id(f_hinweis), SCHWARZ, TextAlign::TOP_LEFT, kuerzen(id(f_hinweis), frage, ZB - 24).c_str());
+            knoepfe(32, my + 34, ZB - 24, namen, aktiv_knopf);
+            it.print(32, my + 72, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
+          }
+          liste_y += mh + 6;
+        }
+        oben_y = liste_y + 8;
       }
+      it.print(20, oben_y, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "AUFGABEN");
+      int liste_y = oben_y + 26;
+      int liste_h = 428 - liste_y;
 
       if (!id(aufgaben).has_state()) {
         it.print(28, liste_y + 10, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, "Warte auf Home Assistant …");
@@ -403,13 +588,14 @@ display:
         abgleichen(liste);
 
         // Elemente der Liste mit ihrer Höhe: Gruppenkopf, Zeile, Zusatz unter der gewählten Zeile
-        enum Art { KOPF, ZEILE, BESTAETIGUNG, OPTIONEN };
+        enum Art { KOPF, ZEILE, BESTAETIGUNG };
         struct Element { Art art; int index; int h; std::string text; };
         std::vector<Element> el;
         std::string gruppe = "-";
-        bool nur_neu = liste.size() == 1;
+        bool nur_neu = std::count_if(liste.begin(), liste.end(), [](const Eintrag &e) { return !e.sauger; }) == 1;
         for (int i = 0; i < (int) liste.size(); i++) {
           const auto &e = liste[i];
+          if (e.sauger) continue;  // steht fest oben, siehe Staubsauger-Zeile
           if (e.neu) {
             el.push_back({KOPF, -1, 22, nur_neu ? "ALLES ERLEDIGT" : ""});
           } else if (e.gruppe != gruppe) {
@@ -422,20 +608,19 @@ display:
           }
           el.push_back({ZEILE, i, 40, ""});
           if (i == cursor && modus == BESTAETIGEN) el.push_back({BESTAETIGUNG, i, 40, ""});
-          if (i == cursor && modus == AUSWAHL) el.push_back({OPTIONEN, i, 96, ""});
         }
 
         // Sichtbaren Ausschnitt so legen, dass die gewählte Zeile ganz zu sehen ist
         int n = el.size();
         std::vector<int> y(n + 1, 0);
         for (int k = 0; k < n; k++) y[k + 1] = y[k] + el[k].h;
-        if (cursor < 0) {
+        if (cursor < 0 || liste[cursor].sauger) {
           oben = 0;
         } else {
           int sel = 0;
           while (sel < n && !(el[sel].art == ZEILE && el[sel].index == cursor)) sel++;
           int ende = sel + 1;
-          while (ende < n && (el[ende].art == BESTAETIGUNG || el[ende].art == OPTIONEN)) ende++;
+          while (ende < n && el[ende].art == BESTAETIGUNG) ende++;
           int start = (sel > 0 && el[sel - 1].art == KOPF) ? sel - 1 : sel;
           oben = std::min(oben, n - 1);
           if (start < oben) oben = start;
@@ -484,23 +669,6 @@ display:
           } else if (m.art == BESTAETIGUNG) {
             it.filled_rectangle(20, ey, LINKS_B - 36, 36, SCHWARZ);
             it.print(32, ey + 18, id(f_hinweis), WEISS, TextAlign::CENTER_LEFT, "Erledigt? Nochmals drücken zum Bestätigen");
-          } else if (m.art == OPTIONEN) {
-            for (int d = 0; d < 3; d++) it.rectangle(20 + d, ey - 2 + d, LINKS_B - 36 - 2 * d, 94 - 2 * d, SCHWARZ);
-            it.print(32, ey + 6, id(f_hinweis), SCHWARZ, TextAlign::TOP_LEFT, "Erledigt. Staubsauger starten:");
-            static const char *NAMEN[] = {"sofort", "5 Min", "20 Min", "60 Min"};
-            int ob = (LINKS_B - 36 - 24 - 3 * 8) / 4;
-            for (int o = 0; o < ANZAHL_OPTIONEN; o++) {
-              int ox = 32 + o * (ob + 8);
-              if (o == auswahl) {
-                it.filled_rectangle(ox, ey + 32, ob, 32, SCHWARZ);
-                it.print(ox + ob / 2, ey + 48, id(f_option), WEISS, TextAlign::CENTER, NAMEN[o]);
-              } else {
-                it.rectangle(ox, ey + 32, ob, 32, SCHWARZ);
-                it.rectangle(ox + 1, ey + 33, ob - 2, 30, SCHWARZ);
-                it.print(ox + ob / 2, ey + 48, id(f_option), SCHWARZ, TextAlign::CENTER, NAMEN[o]);
-              }
-            }
-            it.print(32, ey + 70, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, "Drehen wählt · Drücken bestätigt · 10 s warten bricht ab");
           }
         }
 
