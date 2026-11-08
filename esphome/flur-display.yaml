@@ -176,6 +176,13 @@ switch:
     pin: GPIO26
     restore_mode: ALWAYS_ON
     internal: true
+  # 3.3 V für den "+"-Pin des Drehreglers (KY-040): seine 10-kOhm-Pull-ups halten
+  # CLK und DT stabil (das ESP32-Board hat nur einen 3V3-Pin, der fürs Display gebraucht wird)
+  - platform: gpio
+    id: regler_strom
+    pin: GPIO27
+    restore_mode: ALWAYS_ON
+    internal: true
 
 globals:
   # Nächstes Zeichnen als vollen Aufbau statt Teil-Aktualisierung.
