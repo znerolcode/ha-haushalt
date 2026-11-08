@@ -37,13 +37,13 @@ Auf der Treiberplatine gibt es zwei kleine Schalter. **Interface Config** muss a
 
 | KY-040 | ESP32-Pin | Beschriftung auf dem Board |
 |---|---|---|
-| CLK | GPIO32 | D32 |
-| DT | GPIO33 | D33 |
+| CLK | GPIO33 | D33 |
+| DT | GPIO32 | D32 |
 | SW | GPIO25 | D25 |
 | GND | GND (der zweite GND-Pin) | GND |
-| + | **nicht anschliessen** | |
+| + | GPIO27 | D27 |
 
-Der „+“-Pin bleibt frei: Das ESP32 hat nur einen 3V3-Pin, und der wird fürs Display gebraucht. Der Regler funktioniert trotzdem, weil die Firmware die internen Pull-ups des ESP32 einschaltet.
+Der „+“-Pin kommt an D27: Das ESP32 hat nur einen 3V3-Pin, und der wird fürs Display gebraucht. Die Firmware schaltet D27 deshalb dauerhaft auf 3.3 V. So halten die Widerstände auf der KY-040 die Leitungen stabil, und der Regler springt nicht von selbst.
 
 ## Firmware aufspielen
 
