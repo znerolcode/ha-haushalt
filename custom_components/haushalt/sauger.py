@@ -36,6 +36,8 @@ class Sauger:
       geplant:  {"zeit": iso, "zimmer": [ids]} oder fehlt
       auftrag:  {"zimmer": [ids]} solange ein Saugen läuft, das hier gestartet wurde
       reinigen: True, solange er zum Reinigungspunkt fährt oder dort steht
+      letzter:  {"start": iso, "ende": iso oder fehlt, "zimmer": [ids] oder None}
+                (None: nicht über HA gestartet, z.B. in der Roborock-App)
     """
 
     def __init__(
@@ -83,6 +85,26 @@ class Sauger:
     @callback
     def _zustand_neu(self, event: Event) -> None:
         neu = event.data.get("new_state")
+        alt = event.data.get("old_state")
+        alt_zustand = alt.state if alt else None
+        if neu is not None and neu.state == "cleaning" and alt_zustand not in ("cleaning", "paused"):
+            # Ein neuer Einsatz beginnt (nicht das Weiterfahren nach einer Pause)
+            if not self._daten.get("reinigen"):
+                auftrag = self._daten.get("auftrag")
+                self._daten["letzter"] = {
+                    "start": dt_util.now().isoformat(),
+                    "zimmer": auftrag["zimmer"] if auftrag else None,
+                }
+                self.hass.async_create_task(self._speichern())
+        elif (
+            neu is not None
+            and neu.state in ("returning", "docked", "idle")
+            and alt_zustand in ("cleaning", "paused")
+            and (letzter := self._daten.get("letzter"))
+            and "ende" not in letzter
+        ):
+            letzter["ende"] = dt_util.now().isoformat()
+            self.hass.async_create_task(self._speichern())
         if neu is not None and neu.state == "docked":
             # Zurück in der Station: Auftrag und Reinigen sind vorbei
             if self._daten.pop("auftrag", None) is not None or self._daten.pop(
@@ -114,6 +136,40 @@ class Sauger:
         if geplant := self._daten.get("geplant"):
             return datetime.fromisoformat(geplant["zeit"])
         return None
+
+    @property
+    def kachel(self) -> str:
+        """Eine Zeile für die Haushalt-Kachel auf dem Homescreen."""
+        zustand = self.zustand
+        if zustand == "geplant":
+            return f"Staubsaugen um {dt_util.as_local(self.startzeit).strftime('%H:%M')}"
+        return {
+            "saugt": "Staubsauger saugt",
+            "pausiert": "Staubsauger pausiert",
+            "zurueck": "Staubsauger fährt zurück",
+            "reinigen": "Staubsauger beim Reinigungspunkt",
+            "fehler": "Staubsauger: Fehler",
+        }.get(zustand, "Staubsauger bereit")
+
+    @property
+    def letzter(self) -> str:
+        """Letzter Einsatz fürs Display: 'Mo 09.11.|14:05|14:50|19,20'.
+
+        Ende leer, solange er läuft; Zimmer 'app', wenn nicht über HA gestartet,
+        leer für die ganze Wohnung.
+        """
+        letzter = self._daten.get("letzter")
+        if not letzter:
+            return ""
+        start = dt_util.as_local(datetime.fromisoformat(letzter["start"]))
+        ende = (
+            dt_util.as_local(datetime.fromisoformat(letzter["ende"])).strftime("%H:%M")
+            if letzter.get("ende") else ""
+        )
+        zimmer = letzter.get("zimmer")
+        zimmer_text = "app" if zimmer is None else ",".join(str(z) for z in zimmer)
+        tag = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][start.weekday()]
+        return f"{tag} {start.strftime('%d.%m.')}|{start.strftime('%H:%M')}|{ende}|{zimmer_text}"
 
     @property
     def anzeige(self) -> str:

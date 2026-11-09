@@ -81,3 +81,45 @@ SIGNAL_UPDATE = "haushalt_update_{}"
 
 # So oft wird die Wettervorhersage neu geholt
 WETTER_INTERVALL_MIN = 30
+
+# Gefrierer (optional, unter Konfigurieren einschalten)
+CONF_GEFRIERER = "gefrierer"
+
+GEF_EINHEIT_PORTIONEN = "portionen"
+GEF_EINHEIT_STUECK = "stueck"
+GEF_EINHEIT_GRAMM = "gramm"
+GEF_EINHEITEN = [GEF_EINHEIT_PORTIONEN, GEF_EINHEIT_STUECK, GEF_EINHEIT_GRAMM]
+
+KAT_MEAL_PREP = "meal_prep"
+KAT_BENUTZERDEFINIERT = "benutzerdefiniert"
+# Kategorie und Standard-Haltbarkeit in Monaten (benutzerdefiniert: Zeitraum wählen)
+KATEGORIEN = {
+    KAT_MEAL_PREP: 3,
+    "fleisch": 6,
+    "hackfleisch": 3,
+    "fisch": 4,
+    "gemuese_obst": 12,
+    "brot": 3,
+    KAT_BENUTZERDEFINIERT: None,
+}
+
+# Wie die Haltbarkeit beim Einfrieren bestimmt wird
+HALTBAR_KATEGORIE = "kategorie"
+HALTBAR_ZEITRAUM = "zeitraum"
+HALTBAR_DATUM = "datum"
+HALTBARKEITEN = [HALTBAR_KATEGORIE, HALTBAR_ZEITRAUM, HALTBAR_DATUM]
+
+# Weniger Tage bis zum Ablauf: "bald aufbrauchen"
+GEF_BALD_TAGE = 30
+
+SERVICE_EINFRIEREN = "einfrieren"
+SERVICE_ENTNEHMEN = "entnehmen"
+ATTR_NAME = "name"
+ATTR_KATEGORIE = "kategorie"
+ATTR_MENGE = "menge"
+ATTR_EINHEIT = "einheit"
+ATTR_EINGEFROREN = "eingefroren"
+ATTR_HALTBAR_BIS = "haltbar_bis"
+ATTR_HALTBAR_ANZAHL = "haltbar_anzahl"
+ATTR_HALTBAR_EINHEIT = "haltbar_einheit"
+ATTR_ARTIKEL = "artikel"

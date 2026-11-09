@@ -48,11 +48,32 @@ Ebenfalls unter **Konfigurieren** wählst du optional eine **Wetter-Entität** (
 
 Optional wählst du unter **Konfigurieren** auch einen **Staubsauger** (getestet mit Roborock). Dann zeigt das Flur-Display zuoberst die Zeile „Staubsaugen“: ganze Wohnung oder einzelne Zimmer, sofort oder in 5, 20 oder 60 Minuten, dazu Pausieren, Fortsetzen und Abbrechen. Für **Sauger reinigen** trägst du den **Reinigungspunkt** (X und Y) ein, an den er zum Leeren fährt. Die Koordinaten liest du so aus: Sauger in der Roborock-App mit „Pin & Go“ an den Punkt schicken, dann unter **Entwicklerwerkzeuge → Aktionen** `roborock.get_vacuum_current_position` mit dem Staubsauger ausführen.
 
+## Gefrierer
+
+Optional verwaltet die Integration auch den Inhalt des Gefrierers: was drin ist, wie viel davon und bis wann es haltbar ist. Einschalten unter **Konfigurieren → Gefrierer verwalten**.
+
+- **Einfrieren:** Name, Kategorie, Menge (Portionen, Stück oder Gramm) und Datum. Haltbar ist es wie die Kategorie (Meal-Prep 3 Monate, Fleisch 6, Hackfleisch 3, Fisch 4, Gemüse/Obst 12, Brot/Backwaren 3), für einen eigenen Zeitraum oder bis zu einem Datum. Bei **Benutzerdefiniert** wählst du den Zeitraum immer selbst.
+- **Entnehmen:** Menge angeben, zuerst kommt sie aus der Packung, die am frühesten abläuft. Wird dasselbe (gleicher Name, gleiche Einheit) mehrmals eingefroren, bleiben es eigene Packungen mit eigenem Datum, erscheinen aber zusammen als ein Artikel, z.B. „Chili 7 Port.“.
+- **Gruppen:** abgelaufen, bald aufbrauchen (weniger als 30 Tage) und später.
+
+Für Konten ohne Administratorrechte gibt es das Gerät **Gefrierer** mit Formularfeldern und die Dashboard-Vorlage [`dashboard/gefrierer.yaml`](dashboard/gefrierer.yaml) mit den Tabs Inhalt, Einfrieren und Entnehmen:
+
+1. **Einstellungen → Dashboards → Dashboard hinzufügen → Neues Dashboard von Grund auf**, Titel „Gefrierer“, URL `haushalt-gefrierer` (HA verlangt einen Bindestrich), **Nur für Administratoren** aus.
+2. Dashboard öffnen, Stift → ⋮ → **Raw-Konfigurationseditor**, alles durch den Inhalt der Vorlage ersetzen, speichern.
+3. Der Tab Einfrieren heisst dann `http://<adresse-deines-ha>:8123/haushalt-gefrierer/einfrieren`. Diese Adresse fürs Flur-Display als `gefrierer_url` eintragen (siehe `esphome/ANLEITUNG.md`).
+
+Mit eingeschaltetem Gefrierer zeigt das Flur-Display als Ruheansicht einen Homescreen mit den Kacheln Haushalt und Gefrierer.
+
 ## Entitäten
 
 - Pro Aufgabe ein Sensor **Fälligkeit** (Zustand z.B. „in 4 Tagen“, Attribute `faellig_am`, `tage`, `gruppe`, `aufgabe_id`) und ein Knopf **Erledigt**.
 - Gerät **Neue Aufgabe**: Formularfelder `text.neue_aufgabe_name`, `select.neue_aufgabe_typ`, `select.neue_aufgabe_verpasst`, `number.neue_aufgabe_anzahl`, `select.neue_aufgabe_einheit`, `date.neue_aufgabe_zuletzt`, `switch.neue_aufgabe_mo` … `_so`, `number.neue_aufgabe_mindestabstand`, `date.neue_aufgabe_datum`, `select.neue_aufgabe_frist`, `text.neue_aufgabe_weitere`, Knopf `button.neue_aufgabe_anlegen` und `sensor.neue_aufgabe_meldung` (zuletzt angelegte Aufgabe). Die Werte gelten nur bis zum Anlegen oder bis zum Neustart.
 - `sensor.aufgaben`: Anzahl sichtbarer Aufgaben. Attribut `aufgaben` als Liste, Attribut `anzeige` als Text für das Display, eine Zeile pro Aufgabe: `aufgabe_id|gruppe|name|text|ueberfaellig` (`ueberfaellig` 0 oder 1). Attribut `sauger` (nur mit Staubsauger, sonst leer): `zustand|uhrzeit|zimmer`, z.B. `geplant|17:05|19,20` oder `saugt||`. Zustände: `bereit`, `geplant`, `saugt`, `pausiert`, `zurueck`, `reinigen`, `steht`, `fehler`.
+- `sensor.aufgaben`, Attribut `kachel`: drei Zeilen für die Haushalt-Kachel auf dem Homescreen, je `vor|hervorgehoben|nach` (der mittlere Teil erscheint weiss auf schwarz).
+- `sensor.aufgaben`, Attribut `details`: Details für die rechte Spalte am Display, eine Zeile pro Aufgabe: `aufgabe_id|rhythmus|zuletzt|termin,termin,termin`, z.B. `abc|Mo, Do, jede Woche|Do 05.11.|Mo 09.11.,Do 12.11.,Mo 16.11.` (`zuletzt` ist `noch nie`, wenn die Aufgabe noch nie erledigt wurde).
+- `sensor.aufgaben`, Attribut `sauger_letzter` (nur mit Staubsauger): letzter Einsatz als `tag|start|ende|zimmer`, z.B. `Mo 09.11.|14:05|14:50|19,20`. `ende` ist leer, solange er saugt; `zimmer` ist leer für die ganze Wohnung und `app`, wenn er nicht über Home Assistant gestartet wurde.
+- `sensor.gefrierer` (nur mit Gefrierer): Anzahl Artikel. Attribute `artikel` (Liste mit `artikel`, `name`, `kategorie`, `menge`, `einheit`, `haltbar_bis`, `tage`, `text`, `gruppe`, `packungen`), `meal_prep` (nur Meal-Prep), `kachel` (wie oben) und `anzeige` für das Display, eine Zeile pro Artikel: `artikel|gruppe|name|menge|rest|abgelaufen|meal_prep|optionen|kategorie|packungen`, z.B. `chili~portionen|Bald aufbrauchen|Chili|7 Port.|noch 12 Tage|0|1|1:1 Port.;2:2 Port.;3:3 Port.;7:alle 7|Meal-Prep|3 Port.~21.08.26~21.11.26;4 Port.~02.10.26~02.01.27`. `optionen` sind die Entnahme-Knöpfe als `menge:beschriftung`, `packungen` die einzelnen Packungen (älteste zuerst) als `menge~eingefroren~haltbar_bis`.
+- Gerät **Gefrierer** (nur mit Gefrierer): `text.gefrierer_name`, `select.gefrierer_kategorie`, `number.gefrierer_menge`, `select.gefrierer_einheit`, `date.gefrierer_eingefroren`, `select.gefrierer_haltbarkeit`, `number.gefrierer_haltbar_anzahl`, `select.gefrierer_haltbar_einheit`, `date.gefrierer_haltbar_datum`, `sensor.gefrierer_haltbar_bis` (was das Formular gerade ausrechnet), Knopf `button.gefrierer_einfrieren`; zum Entnehmen `select.gefrierer_artikel`, `number.gefrierer_entnahme`, Knopf `button.gefrierer_entnehmen`; `sensor.gefrierer_meldung` (zuletzt eingefroren oder entnommen).
 - `sensor.display_wetter` (nur mit Wetter-Entität): Zustand ist das Wetter des aktuellen Halbtags. Attribut `tage` als Liste, Attribut `anzeige` als Text, eine Zeile pro Tag: `tag|zustand|temperatur|regen|menge|zustand|temperatur|regen|menge|tiefst|tiefst` (erst Vormittag, dann Nachmittag; die beiden Tiefstwerte in °C stehen am Schluss). `zustand` ist ein Wetterzustand von Home Assistant (`sunny`, `rainy`, …), `temperatur` die höchste Temperatur in °C, `regen` die höchste Regenwahrscheinlichkeit (`40 %`), `menge` die Niederschlagsmenge (`1,2 mm`, leer bei 0). Fehlende Werte bleiben leer. Für den Zustand zählt der häufigste der Stunden, bei Gleichstand der schlechtere. Fehlen stündliche Daten, kommen die Werte aus der Tagesvorhersage.
 
 ## Dienste
@@ -60,6 +81,9 @@ Optional wählst du unter **Konfigurieren** auch einen **Staubsauger** (getestet
 - `haushalt.erledigt` mit `aufgabe_id` hakt eine Aufgabe ab. Bei Aufgaben, die verschwinden, wird der nächste offene Termin abgehakt.
 - `haushalt.saugen` startet den Staubsauger. `zimmer`: Raum-IDs, z.B. `19,20` (leer = ganze Wohnung, sonst `app_segment_clean`). `start_in_min`: 0, 5, 20 oder 60. Ein geplanter Start übersteht einen Neustart von HA; war HA länger als 15 Minuten über den Zeitpunkt hinaus aus, entfällt er.
 - `haushalt.sauger` mit `aktion`: `pausieren`, `fortsetzen`, `abbrechen` (geplanten Start löschen bzw. zurück zur Station) oder `reinigen` (zum Reinigungspunkt fahren).
+
+- `haushalt.einfrieren` mit `name`, `menge`, optional `kategorie` (Standard `meal_prep`), `einheit` (`portionen`, `stueck`, `gramm`), `eingefroren` (Standard heute) und entweder `haltbar_bis` (Datum) oder `haltbar_anzahl` + `haltbar_einheit` (`tage`, `wochen`, `monate`). Ohne beides gilt der Standard der Kategorie.
+- `haushalt.entnehmen` mit `artikel` (Kennung aus `sensor.gefrierer`, z.B. `chili~portionen`) und optional `menge` (leer oder 0 = alles).
 
 ## Ereignis
 

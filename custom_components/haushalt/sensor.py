@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import date
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from . import HaushaltConfigEntry
 from .entity import AufgabeEntity, HaushaltEntity
 from .formular import FormularEntity
 from .logic import Status
+from .gefrierer_formular import GefriererEntity
 
 
 async def async_setup_entry(
@@ -24,6 +27,14 @@ async def async_setup_entry(
     async_add_entities([ListeSensor(manager, entry.entry_id), MeldungSensor(manager)])
     if manager.wetter is not None:
         async_add_entities([WetterSensor(manager, entry.entry_id)])
+    if manager.gefrierer is not None:
+        async_add_entities(
+            [
+                GefriererSensor(manager, entry.entry_id),
+                GefriererMeldung(manager, "sensor", "meldung"),
+                GefriererHaltbarBis(manager, "sensor", "haltbar_bis"),
+            ]
+        )
     for aufgabe_id in manager.aufgaben:
         async_add_entities(
             [AufgabeSensor(manager, aufgabe_id)], config_subentry_id=aufgabe_id
@@ -94,8 +105,43 @@ class ListeSensor(HaushaltEntity, SensorEntity):
                 for s in sichtbar
             ],
             "anzeige": self.manager.anzeige,
+            # Haushalt-Kachel auf dem Homescreen des Displays
+            "kachel": self.manager.kachel,
+            # Rechte Spalte des Displays: Rhythmus, zuletzt erledigt, nächste Termine
+            "details": self.manager.details,
+            "sauger_letzter": self.manager.sauger.letzter if self.manager.sauger else "",
             # Staubsauger-Zeile fürs Display, leer ohne Staubsauger
             "sauger": self.manager.sauger.anzeige if self.manager.sauger else "",
+        }
+
+
+class GefriererSensor(HaushaltEntity, SensorEntity):
+    """Anzahl Artikel im Gefrierer, mit Liste, Display-Zeilen und Kachel als Attribute."""
+
+    _attr_translation_key = "gefrierer"
+    _attr_icon = "mdi:snowflake"
+    _attr_native_unit_of_measurement = "Artikel"
+
+    def __init__(self, manager, entry_id: str) -> None:
+        super().__init__(manager)
+        self._attr_unique_id = f"{entry_id}_gefrierer"
+        # Fester Name, darauf verweisen Display und Dashboard-Vorlage
+        self.entity_id = "sensor.gefrierer"
+
+    @property
+    def native_value(self) -> int:
+        return len(self.manager.gefrierer.artikel())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        heute = dt_util.now().date()
+        gefrierer = self.manager.gefrierer
+        artikel = [a.info(heute) for a in gefrierer.artikel()]
+        return {
+            "artikel": artikel,
+            "meal_prep": [a for a in artikel if a["meal_prep"]],
+            "anzeige": gefrierer.anzeige(heute),
+            "kachel": gefrierer.kachel(heute),
         }
 
 
@@ -146,3 +192,28 @@ class MeldungSensor(FormularEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {"zeit": self.manager.formular_meldung.get("zeit")}
+
+
+class GefriererMeldung(GefriererEntity, SensorEntity):
+    """Zuletzt eingefroren oder entnommen, als Bestätigung im Dashboard."""
+
+    _attr_icon = "mdi:check"
+
+    @property
+    def native_value(self) -> str | None:
+        return self.manager.gefrierer.meldung.get("text")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"zeit": self.manager.gefrierer.meldung.get("zeit")}
+
+
+class GefriererHaltbarBis(GefriererEntity, SensorEntity):
+    """Haltbar bis, wie es das Formular gerade ausrechnet."""
+
+    _attr_icon = "mdi:calendar-clock"
+    _attr_device_class = SensorDeviceClass.DATE
+
+    @property
+    def native_value(self) -> date | None:
+        return self.formular.vorschau()

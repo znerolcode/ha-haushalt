@@ -22,13 +22,23 @@ from homeassistant.util import dt as dt_util
 from .const import (
     AKTIONEN,
     ATTR_AKTION,
+    ATTR_ARTIKEL,
     ATTR_AUFGABE_ID,
+    ATTR_EINGEFROREN,
+    ATTR_EINHEIT,
+    ATTR_HALTBAR_ANZAHL,
+    ATTR_HALTBAR_BIS,
+    ATTR_HALTBAR_EINHEIT,
+    ATTR_KATEGORIE,
+    ATTR_MENGE,
+    ATTR_NAME,
     ATTR_START_IN_MIN,
     ATTR_ZIMMER,
     CONF_ANZAHL,
     CONF_DATEN,
     CONF_EINHEIT,
     CONF_FRIST,
+    CONF_GEFRIERER,
     CONF_REINIGUNG_X,
     CONF_REINIGUNG_Y,
     CONF_STARTDATUM,
@@ -46,9 +56,23 @@ from .const import (
     DEFAULT_ZEIT_ABEND,
     DEFAULT_ZEIT_MORGEN,
     DOMAIN,
+    EINHEIT_MONATE,
     EINHEIT_TAGE,
+    EINHEITEN,
     EVENT_ERLEDIGT,
     FRIST_ABEND,
+    GEF_EINHEIT_PORTIONEN,
+    GEF_EINHEITEN,
+    GRUPPE_HEUTE,
+    GRUPPE_MORGEN,
+    GRUPPE_UEBERFAELLIG,
+    HALTBAR_DATUM,
+    HALTBAR_KATEGORIE,
+    HALTBAR_ZEITRAUM,
+    KAT_MEAL_PREP,
+    KATEGORIEN,
+    SERVICE_EINFRIEREN,
+    SERVICE_ENTNEHMEN,
     SERVICE_ERLEDIGT,
     SERVICE_SAUGEN,
     SERVICE_SAUGER,
@@ -65,6 +89,7 @@ from .logic import (
     Aufgabe,
     Status,
     anzeige_zeilen,
+    details_zeilen,
     berechne_intervall,
     berechne_termin,
     daten_umwandeln,
@@ -72,6 +97,7 @@ from .logic import (
     parse_daten,
 )
 from .formular import Formular
+from .gefrierer import Gefrierer, GefriererFehler, haltbar_bis, menge_text
 from .sauger import Sauger
 from .wetter import WetterDienst
 
@@ -122,16 +148,19 @@ class HaushaltManager:
         # erstellt: {aufgabe_id: iso-datum} für noch nie erledigte Wochentag-Aufgaben,
         # wetter: Zwischenspeicher für den heutigen Vormittag,
         # sauger: geplanter Start und laufender Auftrag des Staubsaugers,
-        # neu: zuletzt über das Formular angelegte Aufgabe {name, zeit}
+        # neu: zuletzt über das Formular angelegte Aufgabe {name, zeit},
+        # gefrierer: Packungen im Gefrierer und letzte Meldung
         self._daten: dict = {
             "zuletzt": {}, "erledigt": {}, "erstellt": {}, "wetter": {}, "sauger": {},
-            "neu": {},
+            "neu": {}, "gefrierer": {},
         }
         self.aufgaben: dict[str, Aufgabe] = {}
         self.stati: dict[str, Status] = {}
         self.wetter: WetterDienst | None = None
         self.sauger: Sauger | None = None
         self.formular = Formular()
+        self.gefrierer: Gefrierer | None = None
+        self.gefrierer_formular = None
 
     @property
     def signal(self) -> str:
@@ -162,6 +191,12 @@ class HaushaltManager:
         self._daten.setdefault("wetter", {})
         self._daten.setdefault("sauger", {})
         self._daten.setdefault("neu", {})
+        self._daten.setdefault("gefrierer", {})
+        if self.entry.options.get(CONF_GEFRIERER):
+            from .gefrierer_formular import GefriererFormular
+
+            self.gefrierer = Gefrierer(self._daten["gefrierer"])
+            self.gefrierer_formular = GefriererFormular()
         # Saugstarts pro Aufgabe gibt es nicht mehr (bis 0.4)
         self._daten.pop("saugstart", None)
         if wetter_id := self.entry.options.get(CONF_WETTER):
@@ -264,12 +299,89 @@ class HaushaltManager:
         async_dispatcher_send(self.hass, self.signal)
 
     @property
+    def details(self) -> str:
+        return details_zeilen(list(self.stati.values()), self._daten["zuletzt"])
+
+    @property
+    def kachel(self) -> str:
+        """Drei Zeilen für die Haushalt-Kachel auf dem Homescreen, je 'vor|hervor|nach'."""
+        sichtbar = sorted(
+            (s for s in self.stati.values() if s.sichtbar), key=Status.sortierschluessel
+        )
+        zahl = {g: sum(1 for s in sichtbar if s.gruppe == g) for g in
+                (GRUPPE_UEBERFAELLIG, GRUPPE_HEUTE, GRUPPE_MORGEN)}
+        rest = [f"{zahl[GRUPPE_HEUTE]} heute", f"{zahl[GRUPPE_MORGEN]} morgen"]
+        if zahl[GRUPPE_UEBERFAELLIG]:
+            zeile1 = f"|{zahl[GRUPPE_UEBERFAELLIG]} überfällig| · " + " · ".join(rest)
+        else:
+            zeile1 = " · ".join(rest) + "||"
+        if sichtbar:
+            zeile2 = f"Nächste: {sichtbar[0].aufgabe.name.replace('|', '/')}||"
+        else:
+            zeile2 = "Keine Aufgaben fällig||"
+        zeile3 = f"{self.sauger.kachel}||" if self.sauger else "||"
+        return "\n".join([zeile1, zeile2, zeile3])
+
+    @property
     def formular_meldung(self) -> dict:
         return self._daten["neu"]
 
     async def async_formular_meldung(self, name: str) -> None:
         self._daten["neu"] = {"name": name, "zeit": dt_util.now().isoformat()}
         await self._store.async_save(self._daten)
+
+    def _gefrierer_fehler(self, err: GefriererFehler) -> ServiceValidationError:
+        return ServiceValidationError(translation_domain=DOMAIN, translation_key=err.args[0])
+
+    def _gefrierer(self) -> Gefrierer:
+        if self.gefrierer is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="kein_gefrierer"
+            )
+        return self.gefrierer
+
+    async def async_einfrieren(
+        self,
+        name: str,
+        kategorie: str,
+        menge: int,
+        einheit: str,
+        eingefroren: Datum | None = None,
+        bis: Datum | None = None,
+        anzahl: int | None = None,
+        zeiteinheit: str | None = None,
+        art: str | None = None,
+    ) -> None:
+        """Packung einfrieren. Ohne `art`: Datum, sonst Zeitraum, sonst Kategorie."""
+        gefrierer = self._gefrierer()
+        eingefroren = eingefroren or dt_util.now().date()
+        if art is None:
+            art = HALTBAR_DATUM if bis else HALTBAR_ZEITRAUM if anzahl else HALTBAR_KATEGORIE
+        try:
+            datum = haltbar_bis(eingefroren, kategorie, art, anzahl, zeiteinheit, bis)
+            packung = gefrierer.einfrieren(name, kategorie, menge, einheit, eingefroren, datum)
+        except GefriererFehler as err:
+            raise self._gefrierer_fehler(err) from err
+        gefrierer.melden(
+            f"Eingefroren: {packung.name}, {menge_text(packung.menge, einheit)}",
+            dt_util.now().isoformat(),
+        )
+        await self._store.async_save(self._daten)
+        self.aktualisieren()
+
+    async def async_entnehmen(self, artikel: str, menge: int | None = None) -> None:
+        """Menge entnehmen (None = alles), zuerst aus der ältesten Packung."""
+        gefrierer = self._gefrierer()
+        try:
+            eintrag, entnommen = gefrierer.entnehmen(artikel, menge)
+        except GefriererFehler as err:
+            raise self._gefrierer_fehler(err) from err
+        gefrierer.melden(
+            f"Entnommen: {eintrag.name}, {menge_text(entnommen, eintrag.einheit)}",
+            dt_util.now().isoformat(),
+        )
+        await self._store.async_save(self._daten)
+        self.aktualisieren()
 
     async def _async_speichern(self) -> None:
         await self._store.async_save(self._daten)
@@ -420,6 +532,62 @@ def _service_registrieren(hass: HomeAssistant) -> None:
             translation_key="unbekannte_aufgabe",
             translation_placeholders={"aufgabe_id": aufgabe_id},
         )
+
+    def _manager_mit_gefrierer() -> HaushaltManager:
+        for entry in hass.config_entries.async_loaded_entries(DOMAIN):
+            if entry.runtime_data.gefrierer is not None:
+                return entry.runtime_data
+        raise ServiceValidationError(
+            translation_domain=DOMAIN, translation_key="kein_gefrierer"
+        )
+
+    async def einfrieren(call: ServiceCall) -> None:
+        await _manager_mit_gefrierer().async_einfrieren(
+            call.data[ATTR_NAME],
+            call.data.get(ATTR_KATEGORIE, KAT_MEAL_PREP),
+            call.data[ATTR_MENGE],
+            call.data.get(ATTR_EINHEIT, GEF_EINHEIT_PORTIONEN),
+            call.data.get(ATTR_EINGEFROREN),
+            call.data.get(ATTR_HALTBAR_BIS),
+            call.data.get(ATTR_HALTBAR_ANZAHL),
+            call.data.get(ATTR_HALTBAR_EINHEIT, EINHEIT_MONATE),
+        )
+
+    async def entnehmen(call: ServiceCall) -> None:
+        menge = call.data.get(ATTR_MENGE)
+        await _manager_mit_gefrierer().async_entnehmen(
+            call.data[ATTR_ARTIKEL], menge if menge else None
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_EINFRIEREN,
+        einfrieren,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_NAME): cv.string,
+                vol.Optional(ATTR_KATEGORIE, default=KAT_MEAL_PREP): vol.In(list(KATEGORIEN)),
+                vol.Required(ATTR_MENGE): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                vol.Optional(ATTR_EINHEIT, default=GEF_EINHEIT_PORTIONEN): vol.In(GEF_EINHEITEN),
+                vol.Optional(ATTR_EINGEFROREN): cv.date,
+                vol.Optional(ATTR_HALTBAR_BIS): cv.date,
+                vol.Optional(ATTR_HALTBAR_ANZAHL): vol.All(vol.Coerce(int), vol.Range(min=1)),
+                vol.Optional(ATTR_HALTBAR_EINHEIT, default=EINHEIT_MONATE): vol.In(EINHEITEN),
+            }
+        ),
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ENTNEHMEN,
+        entnehmen,
+        schema=vol.Schema(
+            {
+                vol.Required(ATTR_ARTIKEL): cv.string,
+                # Leer oder 0 = alles; Text, weil das Display Zahlen als Text schickt
+                vol.Optional(ATTR_MENGE): vol.Any(None, "", vol.All(vol.Coerce(int), vol.Range(min=0))),
+            }
+        ),
+    )
 
     hass.services.async_register(
         DOMAIN,

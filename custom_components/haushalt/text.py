@@ -8,6 +8,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import HaushaltConfigEntry
 from .formular import FormularEntity
+from .gefrierer_formular import GefriererEntity
 
 
 async def async_setup_entry(
@@ -22,6 +23,8 @@ async def async_setup_entry(
             FormularText(manager, "weitere", "mdi:calendar-multiple", 255),
         ]
     )
+    if manager.gefrierer is not None:
+        async_add_entities([GefriererName(manager, "text", "name")])
 
 
 class FormularText(FormularEntity, TextEntity):
@@ -40,3 +43,16 @@ class FormularText(FormularEntity, TextEntity):
     async def async_set_value(self, value: str) -> None:
         setattr(self.formular, self._feld, value)
         self.async_write_ha_state()
+
+
+class GefriererName(GefriererEntity, TextEntity):
+    _attr_native_min = 0
+    _attr_native_max = 60
+    _attr_icon = "mdi:format-text"
+
+    @property
+    def native_value(self) -> str:
+        return self.formular.name
+
+    async def async_set_value(self, value: str) -> None:
+        self._setzen(value)

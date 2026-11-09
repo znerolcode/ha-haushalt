@@ -21,13 +21,15 @@
           "wetter": "Wetter fürs Display",
           "staubsauger": "Staubsauger fürs Display",
           "reinigung_x": "Reinigungspunkt X",
-          "reinigung_y": "Reinigungspunkt Y"
+          "reinigung_y": "Reinigungspunkt Y",
+          "gefrierer": "Gefrierer verwalten"
         },
         "data_description": {
           "wetter": "Optional. Daraus berechnet die Integration Vormittag und Nachmittag für heute und die nächsten 2 Tage (Sensor Display-Wetter).",
           "staubsauger": "Optional. Zeigt zuoberst im Display die Zeile Staubsaugen: ganze Wohnung, einzelne Zimmer oder Sauger reinigen.",
           "reinigung_x": "Optional. Koordinate des Punkts, an den der Sauger zum Leeren und Reinigen fährt. Auslesen mit der Aktion roborock.get_vacuum_current_position, wenn er dort steht.",
-          "reinigung_y": "Optional. Zweite Koordinate des Reinigungspunkts."
+          "reinigung_y": "Optional. Zweite Koordinate des Reinigungspunkts.",
+          "gefrierer": "Optional. Legt das Gerät Gefrierer an (Formular zum Einfrieren und Entnehmen) und den Sensor Gefrierer fürs Display."
         }
       }
     }
@@ -158,6 +160,15 @@
       },
       "neue_aufgabe_meldung": {
         "name": "Zuletzt angelegt"
+      },
+      "gefrierer": {
+        "name": "Gefrierer"
+      },
+      "gefrierer_meldung": {
+        "name": "Zuletzt"
+      },
+      "gefrierer_haltbar_bis": {
+        "name": "Haltbar bis"
       }
     },
     "button": {
@@ -166,6 +177,12 @@
       },
       "neue_aufgabe_anlegen": {
         "name": "Anlegen"
+      },
+      "gefrierer_einfrieren": {
+        "name": "Einfrieren"
+      },
+      "gefrierer_entnehmen": {
+        "name": "Entnehmen"
       }
     },
     "text": {
@@ -174,6 +191,9 @@
       },
       "neue_aufgabe_weitere": {
         "name": "Weitere einzelne Termine"
+      },
+      "gefrierer_name": {
+        "name": "Name"
       }
     },
     "select": {
@@ -205,6 +225,45 @@
           "wochen": "Wochen",
           "monate": "Monate"
         }
+      },
+      "gefrierer_kategorie": {
+        "name": "Kategorie",
+        "state": {
+          "meal_prep": "Meal-Prep (3 Monate)",
+          "fleisch": "Fleisch (6 Monate)",
+          "hackfleisch": "Hackfleisch (3 Monate)",
+          "fisch": "Fisch (4 Monate)",
+          "gemuese_obst": "Gemüse/Obst (12 Monate)",
+          "brot": "Brot/Backwaren (3 Monate)",
+          "benutzerdefiniert": "Benutzerdefiniert"
+        }
+      },
+      "gefrierer_einheit": {
+        "name": "Einheit",
+        "state": {
+          "portionen": "Portionen",
+          "stueck": "Stück",
+          "gramm": "Gramm"
+        }
+      },
+      "gefrierer_haltbarkeit": {
+        "name": "Haltbarkeit",
+        "state": {
+          "kategorie": "Wie Kategorie",
+          "zeitraum": "Eigener Zeitraum",
+          "datum": "Bis Datum"
+        }
+      },
+      "gefrierer_haltbar_einheit": {
+        "name": "Zeitraum in",
+        "state": {
+          "tage": "Tagen",
+          "wochen": "Wochen",
+          "monate": "Monaten"
+        }
+      },
+      "gefrierer_artikel": {
+        "name": "Artikel"
       }
     },
     "number": {
@@ -213,6 +272,15 @@
       },
       "neue_aufgabe_anzahl": {
         "name": "Alle"
+      },
+      "gefrierer_menge": {
+        "name": "Menge"
+      },
+      "gefrierer_haltbar_anzahl": {
+        "name": "Haltbar für"
+      },
+      "gefrierer_entnahme": {
+        "name": "Menge entnehmen"
       }
     },
     "switch": {
@@ -244,6 +312,12 @@
       },
       "neue_aufgabe_zuletzt": {
         "name": "Zuletzt erledigt am"
+      },
+      "gefrierer_eingefroren": {
+        "name": "Eingefroren am"
+      },
+      "gefrierer_haltbar_datum": {
+        "name": "Haltbar bis"
       }
     }
   },
@@ -281,6 +355,58 @@
           "description": "pausieren, fortsetzen, abbrechen oder reinigen."
         }
       }
+    },
+    "einfrieren": {
+      "name": "Einfrieren",
+      "description": "Legt eine Packung in den Gefrierer.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Z.B. Chili con Carne."
+        },
+        "kategorie": {
+          "name": "Kategorie",
+          "description": "meal_prep, fleisch, hackfleisch, fisch, gemuese_obst, brot oder benutzerdefiniert."
+        },
+        "menge": {
+          "name": "Menge",
+          "description": "Anzahl Portionen, Stück oder Gramm."
+        },
+        "einheit": {
+          "name": "Einheit",
+          "description": "portionen, stueck oder gramm."
+        },
+        "eingefroren": {
+          "name": "Eingefroren am",
+          "description": "Ohne Angabe heute."
+        },
+        "haltbar_bis": {
+          "name": "Haltbar bis",
+          "description": "Eigenes Datum. Ohne Angabe gilt der Zeitraum oder der Standard der Kategorie."
+        },
+        "haltbar_anzahl": {
+          "name": "Haltbar für",
+          "description": "Eigener Zeitraum, z.B. 4 (mit Einheit)."
+        },
+        "haltbar_einheit": {
+          "name": "Zeitraum in",
+          "description": "tage, wochen oder monate."
+        }
+      }
+    },
+    "entnehmen": {
+      "name": "Entnehmen",
+      "description": "Nimmt etwas aus dem Gefrierer, zuerst aus der ältesten Packung.",
+      "fields": {
+        "artikel": {
+          "name": "Artikel",
+          "description": "Kennung aus dem Attribut artikel des Sensors Gefrierer, z.B. chili~portionen."
+        },
+        "menge": {
+          "name": "Menge",
+          "description": "Ohne Angabe oder 0: alles."
+        }
+      }
     }
   },
   "exceptions": {
@@ -301,6 +427,27 @@
     },
     "kein_termin": {
       "message": "Bitte einen ersten Termin, Wochentage oder einzelne Termine angeben."
+    },
+    "kein_gefrierer": {
+      "message": "In den Haushalt-Einstellungen ist der Gefrierer nicht eingeschaltet."
+    },
+    "keine_menge": {
+      "message": "Bitte eine Menge von mindestens 1 angeben."
+    },
+    "unbekannte_kategorie": {
+      "message": "Unbekannte Kategorie."
+    },
+    "unbekannter_artikel": {
+      "message": "Diesen Artikel gibt es im Gefrierer nicht (mehr)."
+    },
+    "zeitraum_waehlen": {
+      "message": "Bei Benutzerdefiniert bitte einen eigenen Zeitraum oder ein Datum wählen."
+    },
+    "kein_zeitraum": {
+      "message": "Bitte einen Zeitraum von mindestens 1 angeben."
+    },
+    "kein_haltbar_datum": {
+      "message": "Bitte ein Datum für Haltbar bis wählen."
     }
   }
 }

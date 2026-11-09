@@ -16,6 +16,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     DateSelector,
     EntitySelector,
     EntitySelectorConfig,
@@ -40,6 +41,7 @@ from .const import (
     CONF_REINIGUNG_X,
     CONF_REINIGUNG_Y,
     CONF_STARTDATUM,
+    CONF_GEFRIERER,
     CONF_STAUBSAUGER,
     CONF_TYP,
     CONF_VERPASST,
@@ -139,6 +141,9 @@ class HaushaltOptionsFlow(OptionsFlow):
                     CONF_REINIGUNG_Y,
                     description={"suggested_value": optionen.get(CONF_REINIGUNG_Y)},
                 ): NumberSelector(NumberSelectorConfig(mode=NumberSelectorMode.BOX, step=1)),
+                vol.Required(
+                    CONF_GEFRIERER, default=optionen.get(CONF_GEFRIERER, False)
+                ): BooleanSelector(),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
