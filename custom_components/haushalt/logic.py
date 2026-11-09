@@ -323,6 +323,63 @@ def daten_umwandeln(daten: dict) -> dict:
 
 CONF_EINHEIT_KEY = "einheit"
 
+WOCHENTAG_KURZ = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+
+
+def datum_kurz(datum: date, mit_tag: bool = True) -> str:
+    """z.B. 'Di 10.11.'"""
+    text = datum.strftime("%d.%m.")
+    return f"{WOCHENTAG_KURZ[datum.weekday()]} {text}" if mit_tag else text
+
+
+def _alle(anzahl: int, einheit: str) -> str:
+    if anzahl == 1:
+        return {EINHEIT_TAGE: "jeden Tag", EINHEIT_WOCHEN: "jede Woche"}.get(einheit, "jeden Monat")
+    name = {EINHEIT_TAGE: "Tage", EINHEIT_WOCHEN: "Wochen"}.get(einheit, "Monate")
+    return f"alle {anzahl} {name}"
+
+
+def rhythmus_text(aufgabe: Aufgabe) -> str:
+    """Wie oft die Aufgabe kommt, in Worten, z.B. 'Mo, Do, alle 2 Wochen'."""
+    if aufgabe.typ == TYP_INTERVALL:
+        return f"{_alle(max(aufgabe.anzahl, 1), aufgabe.einheit)} nach dem Erledigen"
+    teile = []
+    if aufgabe.anzahl <= 0:
+        teile.append("einmalig" if aufgabe.startdatum else "")
+    elif aufgabe.einheit == EINHEIT_WOCHEN:
+        tage = aufgabe.wochentage or ([aufgabe.startdatum.weekday()] if aufgabe.startdatum else [])
+        namen = ", ".join(WOCHENTAG_KURZ[t] for t in tage)
+        teile.append(f"{namen}, {_alle(aufgabe.anzahl, aufgabe.einheit)}" if namen else _alle(aufgabe.anzahl, aufgabe.einheit))
+    elif aufgabe.einheit == EINHEIT_TAGE:
+        teile.append(_alle(aufgabe.anzahl, aufgabe.einheit))
+    else:
+        tag = aufgabe.startdatum.day if aufgabe.startdatum else 1
+        teile.append(f"{_alle(aufgabe.anzahl, aufgabe.einheit)} am {tag}.")
+    if aufgabe.daten:
+        teile.append("einzelne Termine")
+    return " + ".join(t for t in teile if t) or "einzelne Termine"
+
+
+def naechste_termine(aufgabe: Aufgabe, status: Status, anzahl: int = 3) -> list[date]:
+    """Die nächsten Termine ab der aktuellen Fälligkeit (Intervall: wenn pünktlich erledigt)."""
+    if status.datum is None:
+        return []
+    if aufgabe.typ == TYP_INTERVALL:
+        schritt = max(aufgabe.anzahl, 1)
+        return [plus(status.datum, i * schritt, aufgabe.einheit) for i in range(anzahl)]
+    return termine_ab(aufgabe, status.datum, anzahl)
+
+
+def details_zeilen(stati: list[Status], zuletzt: dict[str, str]) -> str:
+    """Details pro sichtbarer Aufgabe fürs Display: id|rhythmus|zuletzt|termin,termin,termin"""
+    zeilen = []
+    for s in sorted((s for s in stati if s.sichtbar), key=Status.sortierschluessel):
+        z = zuletzt.get(s.aufgabe.id)
+        zuletzt_text = datum_kurz(date.fromisoformat(z)) if z else "noch nie"
+        termine = ",".join(datum_kurz(d) for d in naechste_termine(s.aufgabe, s))
+        zeilen.append(f"{s.aufgabe.id}|{rhythmus_text(s.aufgabe)}|{zuletzt_text}|{termine}")
+    return "\n".join(zeilen)
+
 
 def anzeige_zeilen(stati: list[Status]) -> str:
     """Kompakte Liste für das Display: eine Zeile pro Aufgabe, Felder mit '|' getrennt.

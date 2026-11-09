@@ -25,6 +25,16 @@ from .const import (
 )
 from .logic import plus
 
+KATEGORIE_NAMEN = {
+    KAT_MEAL_PREP: "Meal-Prep",
+    "fleisch": "Fleisch",
+    "hackfleisch": "Hackfleisch",
+    "fisch": "Fisch",
+    "gemuese_obst": "Gemüse/Obst",
+    "brot": "Brot/Backwaren",
+    "benutzerdefiniert": "Benutzerdefiniert",
+}
+
 GRUPPE_ABGELAUFEN = "Abgelaufen"
 GRUPPE_BALD = "Bald aufbrauchen"
 GRUPPE_SPAETER = "Später"
@@ -315,17 +325,24 @@ class Gefrierer:
     def anzeige(self, heute: date) -> str:
         """Eine Zeile pro Artikel, Felder mit '|' getrennt:
 
-        artikel|gruppe|name|menge|rest|abgelaufen(0/1)|meal_prep(0/1)|optionen
+        artikel|gruppe|name|menge|rest|abgelaufen(0/1)|meal_prep(0/1)|optionen|kategorie|packungen
         optionen: menge:beschriftung, mit ';' getrennt, z.B. '1:1 Port.;7:alle 7'
+        packungen: menge~eingefroren~haltbar_bis, mit ';' getrennt, z.B. '4 Port.~20.08.~21.11.'
         """
         zeilen = []
         for a in self.artikel():
             tage = a.tage(heute)
             optionen = ";".join(f"{m}:{t}" for m, t in a.entnahme_optionen())
+            packungen = ";".join(
+                f"{menge_text(p.menge, p.einheit, kurz=True)}~{p.eingefroren.strftime('%d.%m.%y')}"
+                f"~{p.haltbar_bis.strftime('%d.%m.%y')}"
+                for p in a.packungen
+            )
+            kategorie = KATEGORIE_NAMEN.get(a.kategorie, a.kategorie)
             zeilen.append(
                 f"{a.schluessel}|{gruppe_fuer(tage)}|{a.name}|"
                 f"{menge_text(a.menge, a.einheit, kurz=True)}|{rest_text(tage)}|"
-                f"{1 if tage < 0 else 0}|{1 if a.meal_prep else 0}|{optionen}"
+                f"{1 if tage < 0 else 0}|{1 if a.meal_prep else 0}|{optionen}|{kategorie}|{packungen}"
             )
         return "\n".join(zeilen)
 

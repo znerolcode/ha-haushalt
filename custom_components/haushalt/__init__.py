@@ -89,6 +89,7 @@ from .logic import (
     Aufgabe,
     Status,
     anzeige_zeilen,
+    details_zeilen,
     berechne_intervall,
     berechne_termin,
     daten_umwandeln,
@@ -296,6 +297,10 @@ class HaushaltManager:
         if await self.wetter.async_aktualisieren():
             await self._store.async_save(self._daten)
         async_dispatcher_send(self.hass, self.signal)
+
+    @property
+    def details(self) -> str:
+        return details_zeilen(list(self.stati.values()), self._daten["zuletzt"])
 
     @property
     def kachel(self) -> str:

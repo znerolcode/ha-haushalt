@@ -46,6 +46,12 @@ struct Eintrag {
   bool sauger = false;        // die Staubsauger-Zeile ganz oben
   bool zurueck = false;       // "Zurück" zum Homescreen, ganz oben
   bool meal = false;          // Gefrierer: Meal-Prep (Topf-Symbol)
+  // Gefrierer: für die Details rechts
+  std::string menge, rest, kategorie;
+  struct Packung {
+    std::string menge, eingefroren, bis;
+  };
+  std::vector<Packung> packungen;
   // Gefrierer: Entnahme-Knöpfe als (Menge, Beschriftung)
   std::vector<std::pair<std::string, std::string>> optionen;
 };
@@ -74,6 +80,8 @@ inline bool zimmer_hinweis = false;  // "Erst ein Zimmer wählen"
 inline std::string gef_roh;
 inline std::string kachel_haushalt;
 inline std::string kachel_gefrierer;
+inline std::string details_roh;      // sensor.aufgaben, Attribut details: id|rhythmus|zuletzt|termin,termin,termin
+inline std::string sauger_letzter;   // "Mo 09.11.|14:05|14:50|19,20", Zimmer "app" oder leer = ganze Wohnung
 
 // Gerade abgehakt, aber von Home Assistant noch nicht entfernt
 inline std::set<std::string> versteckt;
@@ -103,6 +111,28 @@ inline std::vector<std::string> teilen(const std::string &text, char trenner) {
 
 // Homescreen nur, wenn die Integration einen Gefrierer liefert
 inline bool home_aktiv() { return !kachel_gefrierer.empty(); }
+
+// Details zu einer Aufgabe für die rechte Spalte
+struct Details {
+  std::string rhythmus, zuletzt;
+  std::vector<std::string> termine;
+};
+
+inline Details details_fuer(const std::string &id) {
+  Details d;
+  for (auto &zeile : teilen(details_roh, '\n')) {
+    auto f = teilen(zeile, '|');
+    if (f.size() < 4 || f[0] != id)
+      continue;
+    d.rhythmus = f[1];
+    d.zuletzt = f[2];
+    for (auto &t : teilen(f[3], ','))
+      if (!t.empty())
+        d.termine.push_back(t);
+    break;
+  }
+  return d;
+}
 
 // ---- Staubsauger ----
 
@@ -210,7 +240,7 @@ inline std::vector<Eintrag> aufgaben_eintraege(const std::string &roh) {
 }
 
 // Zeilen aus sensor.gefrierer, Attribut anzeige:
-// artikel|gruppe|name|menge|rest|abgelaufen|meal_prep|menge:beschriftung;menge:beschriftung
+// artikel|gruppe|name|menge|rest|abgelaufen|meal_prep|menge:beschriftung;...|kategorie|menge~eingefroren~bis;...
 inline std::vector<Eintrag> gefrierer_eintraege() {
   std::vector<Eintrag> liste;
   liste.push_back(zurueck_eintrag());
@@ -223,6 +253,16 @@ inline std::vector<Eintrag> gefrierer_eintraege() {
     e.gruppe = f[1];
     e.name = f[2];
     e.text = f[3] + " · " + f[4];
+    e.menge = f[3];
+    e.rest = f[4];
+    if (f.size() >= 10) {
+      e.kategorie = f[8];
+      for (auto &p : teilen(f[9], ';')) {
+        auto t = teilen(p, '~');
+        if (t.size() == 3)
+          e.packungen.push_back({t[0], t[1], t[2]});
+      }
+    }
     e.ueberfaellig = f[5] == "1";
     e.meal = f[6] == "1";
     for (auto &o : teilen(f[7], ';')) {
@@ -380,7 +420,8 @@ inline void druecken(const std::string &roh) {
   }
   if (ansicht == GEFRIERER) {
     if (e.neu) {
-      modus = QR;
+      if (!home_aktiv())
+        modus = QR;
     } else if (!e.optionen.empty()) {
       modus = GEF_MENU;
       auswahl = 0;
@@ -451,7 +492,9 @@ inline void druecken(const std::string &roh) {
     return;
   }
   if (e.neu) {
-    modus = QR;
+    // Mit Homescreen steht der QR-Code schon rechts, sobald die Zeile gewählt ist
+    if (!home_aktiv())
+      modus = QR;
     return;
   }
   if (modus == LISTE) {

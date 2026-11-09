@@ -107,6 +107,9 @@ class ListeSensor(HaushaltEntity, SensorEntity):
             "anzeige": self.manager.anzeige,
             # Haushalt-Kachel auf dem Homescreen des Displays
             "kachel": self.manager.kachel,
+            # Rechte Spalte des Displays: Rhythmus, zuletzt erledigt, nächste Termine
+            "details": self.manager.details,
+            "sauger_letzter": self.manager.sauger.letzter if self.manager.sauger else "",
             # Staubsauger-Zeile fürs Display, leer ohne Staubsauger
             "sauger": self.manager.sauger.anzeige if self.manager.sauger else "",
         }

@@ -82,10 +82,12 @@ def test_anzeige_und_kachel():
     g.einfrieren("Erbsen", "gemuese_obst", 500, "gramm", HEUTE, HEUTE - timedelta(days=3))
     g.einfrieren("Lachs|frisch", "fisch", 2, "stueck", HEUTE, HEUTE + timedelta(days=90))
     assert g.anzeige(HEUTE).split("\n") == [
-        "erbsen~gramm|Abgelaufen|Erbsen|500 g|seit 3 Tagen|1|0|100:100 g;250:250 g;500:alle 500 g",
-        "chili~portionen|Bald aufbrauchen|Chili|7 Port.|noch 12 Tage|0|1|"
-        "1:1 Port.;2:2 Port.;3:3 Port.;7:alle 7",
-        "lachs/frisch~stueck|Später|Lachs/frisch|2 Stück|noch 3 Monate|0|0|1:1 Stück;2:alle 2",
+        ("erbsen~gramm|Abgelaufen|Erbsen|500 g|seit 3 Tagen|1|0|100:100 g;250:250 g;500:alle 500 g"
+        "|Gemüse/Obst|500 g~26.10.26~23.10.26"),
+        ("chili~portionen|Bald aufbrauchen|Chili|7 Port.|noch 12 Tage|0|1|"
+        "1:1 Port.;2:2 Port.;3:3 Port.;7:alle 7|Meal-Prep|7 Port.~26.10.26~07.11.26"),
+        ("lachs/frisch~stueck|Später|Lachs/frisch|2 Stück|noch 3 Monate|0|0|1:1 Stück;2:alle 2"
+        "|Fisch|2 Stück~26.10.26~24.01.27"),
     ]
     assert g.kachel(HEUTE).split("\n") == [
         "3 Artikel · |1 abgelaufen| · 1 bald",
@@ -167,6 +169,7 @@ async def test_dienste(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactor
     state = hass.states.get("sensor.gefrierer")
     assert state.attributes["anzeige"] == (
         "chili~portionen|Später|Chili|3 Port.|noch 3 Monate|0|1|1:1 Port.;2:2 Port.;3:alle 3"
+        "|Meal-Prep|3 Port.~26.10.26~26.01.27"
     )
     assert hass.states.get("sensor.gefrierer_meldung").state == "Entnommen: Kürbissuppe, 1 kg"
     with pytest.raises(ServiceValidationError):
@@ -233,3 +236,45 @@ async def test_formular(hass: HomeAssistant, entry):  # noqa: F811
 async def test_haushalt_kachel(hass: HomeAssistant, entry):  # noqa: F811
     kachel = hass.states.get("sensor.aufgaben").attributes["kachel"]
     assert kachel.split("\n") == ["0 heute · 0 morgen||", "Keine Aufgaben fällig||", "||"]
+
+
+async def test_aufgaben_details(hass: HomeAssistant, entry):  # noqa: F811
+    from .test_init import aufgabe_anlegen
+
+    await aufgabe_anlegen(
+        hass, entry, "Bettwäsche", "intervall",
+        {"anzahl": 2, "einheit": "wochen", "zuletzt_erledigt": "2026-10-16"},
+    )
+    await aufgabe_anlegen(
+        hass, entry, "Pflanzen", "termin",
+        {"startdatum": "2026-10-26", "anzahl": 1, "einheit": "wochen", "wochentage": ["mo", "do"]},
+        verpasst="stehen",
+    )
+    details = hass.states.get("sensor.aufgaben").attributes["details"].split("\n")
+    zeilen = {z.split("|")[1]: z.split("|")[2:] for z in details}
+    assert zeilen["alle 2 Wochen nach dem Erledigen"] == ["Fr 16.10.", "Fr 30.10.,Fr 13.11.,Fr 27.11."]
+    assert zeilen["Mo, Do, jede Woche"] == ["noch nie", "Mo 26.10.,Do 29.10.,Mo 02.11."]
+
+
+async def test_sauger_letzter_einsatz(hass: HomeAssistant, entry, freezer: FrozenDateTimeFactory):  # noqa: F811
+    from .test_init import sauger_einrichten
+
+    await sauger_einrichten(hass, entry)
+    attr = lambda: hass.states.get("sensor.aufgaben").attributes["sauger_letzter"]
+    assert attr() == ""
+    await hass.services.async_call(DOMAIN, "saugen", {"zimmer": "19,20"}, blocking=True)
+    hass.states.async_set("vacuum.robi", "cleaning")
+    await hass.async_block_till_done()
+    assert attr() == "Mo 26.10.|12:00||19,20"
+    freezer.tick(timedelta(minutes=45))
+    hass.states.async_set("vacuum.robi", "returning")
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert attr() == "Mo 26.10.|12:00|12:45|19,20"
+    # In der Roborock-App gestartet: Zimmer unbekannt
+    hass.states.async_set("vacuum.robi", "docked")
+    await hass.async_block_till_done()
+    hass.states.async_set("vacuum.robi", "cleaning")
+    await hass.async_block_till_done()
+    assert attr().endswith("||app")

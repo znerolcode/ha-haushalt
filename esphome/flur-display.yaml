@@ -80,6 +80,24 @@ text_sensor:
     on_value:
       - lambda: 'flur::kachel_haushalt = x;'
       - script.execute: daten_neu
+  # Details zur gewählten Aufgabe (rechte Spalte): id|rhythmus|zuletzt|termin,termin,termin
+  - platform: homeassistant
+    id: details
+    entity_id: sensor.aufgaben
+    attribute: details
+    internal: true
+    on_value:
+      - lambda: 'flur::details_roh = x;'
+      - script.execute: daten_neu
+  # Letzter Einsatz des Staubsaugers: tag|start|ende|zimmer
+  - platform: homeassistant
+    id: sauger_letzter
+    entity_id: sensor.aufgaben
+    attribute: sauger_letzter
+    internal: true
+    on_value:
+      - lambda: 'flur::sauger_letzter = x;'
+      - script.execute: daten_neu
   # Gefrierer: nur wenn in der Integration eingeschaltet, sonst gibt es keinen Homescreen
   - platform: homeassistant
     id: gefrierer
@@ -595,10 +613,15 @@ display:
       }
 
       // ---- Spalten ----
+      // Rechts das Wetter auf dem Homescreen, in den Listen Details zur gewählten Zeile.
+      // Ohne Homescreen (Gefrierer aus) bleibt das Wetter neben den Aufgaben.
       const int LINKS_B = 470;
+      const bool wetter_zeigen = ansicht == HOME || !home_aktiv();
       it.filled_rectangle(LINKS_B, 59, 3, 480 - 59, SCHWARZ);
-      it.print(LINKS_B + 21, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "VORMITTAG");
-      it.print(LINKS_B + 21 + (800 - 18 - LINKS_B - 21) / 2 + 6, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "NACHMITTAG");
+      if (wetter_zeigen) {
+        it.print(LINKS_B + 21, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "VORMITTAG");
+        it.print(LINKS_B + 21 + (800 - 18 - LINKS_B - 21) / 2 + 6, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "NACHMITTAG");
+      }
       const int ZB = LINKS_B - 36;  // Breite der Zeilen
       const char *HILFE = "Drehen wählt · Drücken bestätigt · 10 s warten bricht ab";
 
@@ -886,6 +909,202 @@ display:
         } else {
           liste_zeichnen(liste, liste_y, "ALLES ERLEDIGT");
         }
+      }
+
+      // ---- Details rechts: zur gewählten Zeile, sonst Übersicht ----
+      const int DX = LINKS_B + 21;
+      const int DB = B - 18 - DX;
+      if (!wetter_zeigen) {
+        auto liste = eintraege(id(aufgaben).state);
+        const Eintrag *e = cursor >= 0 && cursor < (int) liste.size() ? &liste[cursor] : nullptr;
+        if (e && e->zurueck) e = nullptr;
+        int y = 70;
+        const int UNTEN = 462;
+        // Überschrift wie VORMITTAG
+        auto ueber = [&](const char *t) {
+          y += 8;
+          it.print(DX, y, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, t);
+          y += 22;
+        };
+        // Text mit Zeilenumbruch an Leerzeichen, höchstens max Zeilen
+        auto absatz = [&](esphome::font::Font *f, const std::string &text, int zh, int max) {
+          std::vector<std::string> zeilen;
+          std::string z;
+          for (auto &w : teilen(text, ' ')) {
+            std::string t = z.empty() ? w : z + " " + w;
+            int x1, y1, tw, th;
+            it.get_text_bounds(0, 0, t.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &tw, &th);
+            if (z.empty() || tw <= DB) z = t;
+            else { zeilen.push_back(z); z = w; }
+          }
+          if (!z.empty()) zeilen.push_back(z);
+          for (int i = 0; i < (int) zeilen.size() && i < max; i++) {
+            std::string t = zeilen[i];
+            // letzte erlaubte Zeile: Rest anhängen, dann kürzen
+            if (i == max - 1)
+              for (int r = i + 1; r < (int) zeilen.size(); r++) t += " " + zeilen[r];
+            it.print(DX, y, f, SCHWARZ, TextAlign::TOP_LEFT, kuerzen(f, t, DB).c_str());
+            y += zh;
+          }
+        };
+        // Links Text, rechts Wert
+        auto paar = [&](esphome::font::Font *f, const std::string &links, const std::string &rechts) {
+          int x1, y1, w, h;
+          it.get_text_bounds(0, 0, rechts.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+          it.print(DX, y, f, SCHWARZ, TextAlign::TOP_LEFT, kuerzen(f, links, DB - w - 12).c_str());
+          it.print(DX + DB, y, f, SCHWARZ, TextAlign::TOP_RIGHT, rechts.c_str());
+          y += 24;
+        };
+
+        if (e && e->neu) {
+          // QR-Code: neue Aufgabe bzw. einfrieren
+          bool gef = ansicht == GEFRIERER;
+          it.print(DX, y, id(f_qr_titel), SCHWARZ, TextAlign::TOP_LEFT, gef ? "Einfrieren" : "Neue Aufgabe");
+          y += 44;
+          it.qr_code(DX, y, gef ? id(qr_gefrierer) : id(qr_neue_aufgabe), SCHWARZ, 5);
+          y = 300;
+          it.print(DX, y, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Mit dem Handy scannen.");
+          y += 25;
+          if (gef) {
+            absatz(id(f_qr), "Home Assistant öffnet das Formular zum Einfrieren.", 25, 3);
+          } else {
+            absatz(id(f_qr), "Home Assistant öffnet die Haushalt-Seite. Dort „Aufgabe hinzufügen“.", 25, 3);
+          }
+        } else if (ansicht == GEFRIERER && e) {
+          // Artikel: Name gross, Kategorie, Gesamtmenge, Packungen
+          absatz(id(f_qr_titel), e->name, 34, 2);
+          if (!e->kategorie.empty()) {
+            if (e->meal) {
+              it.print(DX, y + 10, id(f_symbol_klein), SCHWARZ, TextAlign::CENTER_LEFT, "\U000F065A");
+              it.print(DX + 24, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, e->kategorie.c_str());
+            } else {
+              it.print(DX, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, e->kategorie.c_str());
+            }
+            y += 26;
+          }
+          ueber("IM GEFRIERER");
+          it.print(DX, y, id(f_wtemp), SCHWARZ, TextAlign::TOP_LEFT, e->menge.c_str());
+          y += 28;
+          if (e->ueberfaellig) {
+            int x1, y1, w, h;
+            std::string t = "abgelaufen " + e->rest;
+            it.get_text_bounds(DX + 5, y, t.c_str(), id(f_hinweis), TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+            it.filled_rectangle(DX, y - 2, w + 10, 24, SCHWARZ);
+            it.print(DX + 5, y, id(f_hinweis), WEISS, TextAlign::TOP_LEFT, t.c_str());
+          } else {
+            it.print(DX, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, e->rest.c_str());
+          }
+          y += 26;
+          if (!e->packungen.empty()) {
+            int n = e->packungen.size();
+            ueber(n == 1 ? "PACKUNG" : (to_string(n) + " PACKUNGEN, ÄLTESTE ZUERST").c_str());
+            for (int k = 0; k < n; k++) {
+              if (y + 44 > UNTEN && k < n - 1) {
+                it.printf(DX, y, id(f_gruppe), SCHWARZ, TextAlign::TOP_LEFT, "%d weitere", n - k);
+                break;
+              }
+              const auto &p = e->packungen[k];
+              paar(id(f_hinweis), p.menge, "bis " + p.bis);
+              it.print(DX, y - 3, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, ("eingefroren " + p.eingefroren).c_str());
+              y += 19;
+            }
+          }
+        } else if (ansicht == GEFRIERER) {
+          // Übersicht: Vorrat an Meal-Prep
+          it.print(DX, y, id(f_qr_titel), SCHWARZ, TextAlign::TOP_LEFT, "Meal-Prep");
+          y += 40;
+          int n = 0, rest = 0;
+          for (const auto &a : liste) {
+            if (!a.meal) continue;
+            if (y + 24 > UNTEN) { rest++; continue; }
+            paar(id(f_text), a.name, a.menge);
+            n++;
+          }
+          if (rest) it.printf(DX, y, id(f_gruppe), SCHWARZ, TextAlign::TOP_LEFT, "%d weitere", rest);
+          if (!n) absatz(id(f_text), "Keine Meal-Prep-Portionen im Gefrierer.", 24, 2);
+        } else if (e && e->sauger) {
+          // Staubsauger: Zustand, Zimmer, letzter Einsatz
+          auto s = sauger_lesen();
+          it.print(DX, y, id(f_qr_titel), SCHWARZ, TextAlign::TOP_LEFT, "Staubsauger");
+          y += 40;
+          std::string zustand = "in der Station";
+          if (s.zustand == "geplant") zustand = "startet um " + s.zeit;
+          else if (s.zustand == "saugt") zustand = "saugt";
+          else if (s.zustand == "pausiert") zustand = "pausiert";
+          else if (s.zustand == "zurueck") zustand = "fährt zur Station";
+          else if (s.zustand == "reinigen") zustand = "zum Leeren und Reinigen";
+          else if (s.zustand == "steht") zustand = "steht, nicht in der Station";
+          else if (s.zustand == "fehler") zustand = "Störung, Details in der Roborock-App";
+          ueber("ZUSTAND");
+          absatz(id(f_text), zustand, 24, 2);
+          bool waehlt = modus == SAUG_ZEIT || modus == SAUG_FRAGE;
+          if (waehlt || s.zustand == "geplant" || s.zustand == "saugt" || s.zustand == "pausiert") {
+            ueber(waehlt ? "GEWÄHLT" : "ZIMMER");
+            absatz(id(f_text), zimmer_text(waehlt ? gewaehlt : s.zimmer), 24, 3);
+          }
+          ueber("LETZTER EINSATZ");
+          auto f = teilen(sauger_letzter, '|');
+          if (f.size() < 4 || f[0].empty()) {
+            it.print(DX, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, "noch keiner");
+          } else {
+            std::string wann = f[0] + ", " + f[1] + (f[2].empty() ? " bis jetzt" : "–" + f[2]);
+            it.print(DX, y, id(f_hinweis), SCHWARZ, TextAlign::TOP_LEFT, wann.c_str());
+            y += 26;
+            std::string zimmer;
+            if (f[3] == "app") zimmer = "in der Roborock-App gestartet";
+            else {
+              std::vector<int> ids;
+              for (auto &t : teilen(f[3], ',')) if (!t.empty()) ids.push_back(atoi(t.c_str()));
+              zimmer = zimmer_text(ids);
+            }
+            absatz(id(f_text), zimmer, 24, 4);
+          }
+        } else if (e) {
+          // Aufgabe: Rhythmus, zuletzt erledigt, nächste Termine
+          auto d = details_fuer(e->id);
+          absatz(id(f_qr_titel), e->name, 34, 2);
+          it.print(DX, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, kuerzen(id(f_text), e->text, DB).c_str());
+          y += 26;
+          if (!d.rhythmus.empty()) {
+            ueber("RHYTHMUS");
+            absatz(id(f_text), d.rhythmus, 24, 3);
+          }
+          if (!d.zuletzt.empty()) {
+            ueber("ZULETZT ERLEDIGT");
+            it.print(DX, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, d.zuletzt.c_str());
+            y += 24;
+          }
+          if (!d.termine.empty()) {
+            ueber("NÄCHSTE TERMINE");
+            for (auto &t : d.termine) {
+              if (y + 24 > UNTEN) break;
+              it.print(DX, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, t.c_str());
+              y += 24;
+            }
+          }
+        } else {
+          // Übersicht: überfällig, heute, morgen
+          it.print(DX, y, id(f_qr_titel), SCHWARZ, TextAlign::TOP_LEFT, "Heute und morgen");
+          y += 40;
+          int n = 0;
+          static const char *GRUPPEN[][2] = {{"Überfällig", "ÜBERFÄLLIG"}, {"Heute", "HEUTE"}, {"Morgen", "MORGEN"}};
+          for (auto &g : GRUPPEN) {
+            int k = std::count_if(liste.begin(), liste.end(), [&](const Eintrag &a) { return a.gruppe == g[0]; });
+            if (!k || y + 54 > UNTEN) continue;
+            ueber(g[1]);
+            int rest = 0;
+            for (const auto &a : liste) {
+              if (a.gruppe != g[0]) continue;
+              if (y + 24 > UNTEN) { rest++; continue; }
+              it.print(DX, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, kuerzen(id(f_text), a.name, DB).c_str());
+              y += 24;
+              n++;
+            }
+            if (rest) { it.printf(DX, y, id(f_gruppe), SCHWARZ, TextAlign::TOP_LEFT, "%d weitere", rest); y += 20; }
+          }
+          if (!n) absatz(id(f_text), "Nichts zu tun. Drehen zeigt Details zu jeder Aufgabe.", 24, 3);
+        }
+        return;
       }
 
       // ---- Wetter: pro Tag Vormittag und Nachmittag ----
