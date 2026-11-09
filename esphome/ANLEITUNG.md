@@ -56,6 +56,7 @@ Der „+“-Pin kommt an D27: Das ESP32 hat nur einen 3V3-Pin, und der wird für
 ```yaml
 substitutions:
   innen_temperatur: sensor.flur_temperatur  # deinen Temperatursensor eintragen
+  aussen_temperatur: sensor.xiaomi_atc1_temperature  # Aussensensor (Balkon)
 
 packages:
   flur_display:
@@ -65,7 +66,7 @@ packages:
     refresh: 0s
 ```
 
-4. Bei `innen_temperatur` die Entität deines Temperatursensors eintragen (in HA unter Einstellungen → Entitäten zu finden).
+4. Bei `innen_temperatur` und `aussen_temperatur` die Entitäten deiner Temperatursensoren eintragen (in HA unter Einstellungen → Entitäten zu finden).
 5. **Save**.
 
 ESPHome holt die eigentliche Firmware aus diesem Repository. Mit `refresh: 0s` lädt es bei jedem Aufspielen den neusten Stand, Verbesserungen kommen so automatisch dazu.

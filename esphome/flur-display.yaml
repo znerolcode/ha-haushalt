@@ -5,6 +5,8 @@
 substitutions:
   # Sensor für die Innentemperatur in der Kopfzeile, in der Gerätekonfiguration überschreiben
   innen_temperatur: sensor.flur_temperatur
+  # Sensor für die Aussentemperatur in der Kopfzeile (Standard: Balkon)
+  aussen_temperatur: sensor.xiaomi_atc1_temperature
   # Ziel des QR-Codes bei "+ Neue Aufgabe". Ohne Änderung öffnet er die Haushalt-Seite
   # in HA (nur für Administratoren). Für alle Konten: Adresse des Dashboards
   # "Neue Aufgabe" eintragen, z.B. http://192.168.178.10:8123/neue-aufgabe/neu
@@ -130,6 +132,9 @@ sensor:
   - platform: homeassistant
     id: innen
     entity_id: ${innen_temperatur}
+  - platform: homeassistant
+    id: aussen
+    entity_id: ${aussen_temperatur}
   - platform: rotary_encoder
     id: regler
     pin_a:
@@ -494,12 +499,21 @@ display:
                   TAGE[jetzt.day_of_week - 1], jetzt.day_of_month, MONATE[jetzt.month - 1]);
         it.printf(B - 20, 46, id(f_klein), SCHWARZ, TextAlign::BASELINE_RIGHT, "aktualisiert %02d:%02d", jetzt.hour, jetzt.minute);
       }
-      if (id(innen).has_state()) {
+      // "Aussen 8,2 °C · Innen 21,4 °C", fehlende Werte fallen weg
+      auto temp = [](float w) {
         char t[16];
-        snprintf(t, sizeof(t), "%.1f", id(innen).state);
-        for (char *c = t; *c; c++) if (*c == '.') *c = ',';
-        it.printf(B - 20, 24, id(f_meta), SCHWARZ, TextAlign::BASELINE_RIGHT, "Innen %s °C", t);
-      }
+        snprintf(t, sizeof(t), "%.1f", w);
+        std::string s = t;
+        if (!s.empty() && s[0] == '-') s = "−" + s.substr(1);
+        for (auto &c : s) if (c == '.') c = ',';
+        return s + " °C";
+      };
+      std::string temps;
+      if (id(aussen).has_state() && !std::isnan(id(aussen).state)) temps = "Aussen " + temp(id(aussen).state);
+      if (id(innen).has_state() && !std::isnan(id(innen).state))
+        temps += (temps.empty() ? "" : "  ·  ") + std::string("Innen ") + temp(id(innen).state);
+      if (!temps.empty())
+        it.print(B - 20, 24, id(f_meta), SCHWARZ, TextAlign::BASELINE_RIGHT, temps.c_str());
       it.filled_rectangle(0, 56, B, 3, SCHWARZ);
 
       // ---- Knöpfe nebeneinander, der gewählte schwarz ----
