@@ -1,4 +1,4 @@
-# Flur-Display: E-Ink 7,5" (Waveshare V2) mit Drehregler, zeigt Haushalt-Aufgaben und Wetter.
+# Flur-Display: E-Ink 7,5" (Waveshare V2) mit Drehregler, zeigt Haushalt-Aufgaben, Gefrierer und Wetter.
 # Wird als Paket in die Gerätekonfiguration eingebunden, siehe ANLEITUNG.md im selben Ordner.
 # WLAN, API und OTA kommen aus der Gerätekonfiguration, die ESPHome beim Anlegen erzeugt.
 
@@ -9,6 +9,9 @@ substitutions:
   # in HA (nur für Administratoren). Für alle Konten: Adresse des Dashboards
   # "Neue Aufgabe" eintragen, z.B. http://192.168.178.10:8123/neue-aufgabe/neu
   neue_aufgabe_url: https://my.home-assistant.io/redirect/integration/?domain=haushalt
+  # Ziel des QR-Codes bei "+ Einfrieren": Tab Einfrieren im Dashboard "Gefrierer"
+  # (dashboard/gefrierer.yaml), z.B. http://192.168.178.10:8123/haushalt-gefrierer/einfrieren
+  gefrierer_url: http://homeassistant.local:8123/haushalt-gefrierer/einfrieren
 
 # Angepasster Display-Treiber aus diesem Repository: sendet das Bild in einem Stück
 # statt Byte für Byte (sonst dauert jeder Schritt mehrere Sekunden)
@@ -67,6 +70,36 @@ text_sensor:
     attribute: sauger
     on_value:
       - lambda: 'flur::sauger_roh = x;'
+      - script.execute: daten_neu
+  # Kacheln auf dem Homescreen, je 3 Zeilen 'vor|hervor|nach'
+  - platform: homeassistant
+    id: kachel_haushalt
+    entity_id: sensor.aufgaben
+    attribute: kachel
+    internal: true
+    on_value:
+      - lambda: 'flur::kachel_haushalt = x;'
+      - script.execute: daten_neu
+  # Gefrierer: nur wenn in der Integration eingeschaltet, sonst gibt es keinen Homescreen
+  - platform: homeassistant
+    id: gefrierer
+    entity_id: sensor.gefrierer
+    attribute: anzeige
+    internal: true
+    on_value:
+      - lambda: 'flur::gef_roh = x;'
+      - script.execute: daten_neu
+  - platform: homeassistant
+    id: kachel_gefrierer
+    entity_id: sensor.gefrierer
+    attribute: kachel
+    internal: true
+    on_value:
+      - lambda: |-
+          bool vorher = flur::home_aktiv();
+          flur::kachel_gefrierer = x;
+          // Gefrierer neu eingeschaltet: in Ruhe gleich den Homescreen zeigen
+          if (!vorher && flur::home_aktiv() && flur::cursor < 0) flur::ruhe();
       - script.execute: daten_neu
   - platform: homeassistant
     id: wetter
@@ -192,7 +225,7 @@ globals:
     initial_value: 'true'
 
 script:
-  # Knopf gedrückt: abhaken, Auswahl bestätigen oder Staubsauger steuern
+  # Knopf gedrückt: öffnen, abhaken, Auswahl bestätigen, entnehmen oder Staubsauger steuern
   - id: druecken
     then:
       - lambda: 'flur::druecken(id(aufgaben).state);'
@@ -223,6 +256,16 @@ script:
                 data:
                   aktion: !lambda 'return flur::saug_aktion;'
       - lambda: 'flur::saug_aktion.clear();'
+      - if:
+          condition:
+            lambda: 'return flur::gef_senden;'
+          then:
+            - homeassistant.action:
+                action: haushalt.entnehmen
+                data:
+                  artikel: !lambda 'return flur::gef_artikel;'
+                  menge: !lambda 'return flur::gef_menge;'
+            - lambda: 'flur::gef_senden = false;'
       - script.execute: nach_eingabe
   # Zeichnen, bei Bedarf als voller Aufbau
   - id: zeichnen
@@ -238,7 +281,9 @@ script:
             - component.update: epaper
           else:
             - component.update: epaper
-  # Nach jeder Eingabe: sofort zeichnen, dann Zeitlimits abwarten
+  # Nach jeder Eingabe: sofort zeichnen, dann Zeitlimits abwarten.
+  # Nach 10 s bricht ein offenes Menü ab, nach 60 s geht es zurück in die Ruheansicht
+  # (Homescreen bzw. ohne Gefrierer die Aufgabenliste).
   - id: nach_eingabe
     mode: restart
     then:
@@ -250,12 +295,7 @@ script:
           then:
             - lambda: 'flur::auswahl_abbrechen();'
             - component.update: epaper
-      - delay: 20s
-      - if:
-          condition:
-            lambda: 'return flur::modus == flur::QR;'
-          then:
-            - delay: 30s
+      - delay: 50s
       # Zurück in Ruhe: gründlich zeichnen, die schnellen Schritte beim Drehen sind blasser
       - lambda: |-
           flur::ruhe();
@@ -283,6 +323,8 @@ spi:
 qr_code:
   - id: qr_neue_aufgabe
     value: ${neue_aufgabe_url}
+  - id: qr_gefrierer
+    value: ${gefrierer_url}
 
 font:
   - file: "gfonts://Inter@700"
@@ -375,6 +417,18 @@ font:
     size: 18
     glyphs:
       - "\U000F058C" # water
+      - "\U000F0717" # snowflake
+      - "\U000F065A" # pot-steam (Meal-Prep)
+      - "\U000F0141" # chevron-left (Zurück)
+
+  # Symbole der Kacheln auf dem Homescreen
+  - file:
+      type: web
+      url: https://raw.githubusercontent.com/Templarian/MaterialDesign-Webfont/v7.4.47/fonts/materialdesignicons-webfont.ttf
+    id: f_symbol_mittel
+    size: 30
+    glyphs:
+      - "\U000F00E2" # broom
       - "\U000F0717" # snowflake
 
 display:
@@ -520,14 +574,22 @@ display:
         return;
       }
 
-      // ---- QR-Code für neue Aufgaben ----
+      // ---- QR-Codes: neue Aufgabe bzw. einfrieren ----
       if (modus == QR) {
-        it.qr_code(150, 120, id(qr_neue_aufgabe), SCHWARZ, 6);
-        it.print(430, 150, id(f_qr_titel), SCHWARZ, TextAlign::TOP_LEFT, "Neue Aufgabe");
-        it.print(430, 200, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Mit dem Handy scannen.");
-        it.print(430, 225, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Home Assistant öffnet die");
-        it.print(430, 250, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Haushalt-Seite.");
-        it.print(430, 290, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Dort „Aufgabe hinzufügen“.");
+        if (ansicht == GEFRIERER) {
+          it.qr_code(150, 120, id(qr_gefrierer), SCHWARZ, 6);
+          it.print(430, 150, id(f_qr_titel), SCHWARZ, TextAlign::TOP_LEFT, "Einfrieren");
+          it.print(430, 200, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Mit dem Handy scannen.");
+          it.print(430, 225, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Home Assistant öffnet das");
+          it.print(430, 250, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Formular zum Einfrieren.");
+        } else {
+          it.qr_code(150, 120, id(qr_neue_aufgabe), SCHWARZ, 6);
+          it.print(430, 150, id(f_qr_titel), SCHWARZ, TextAlign::TOP_LEFT, "Neue Aufgabe");
+          it.print(430, 200, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Mit dem Handy scannen.");
+          it.print(430, 225, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Home Assistant öffnet die");
+          it.print(430, 250, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Haushalt-Seite.");
+          it.print(430, 290, id(f_qr), SCHWARZ, TextAlign::TOP_LEFT, "Dort „Aufgabe hinzufügen“.");
+        }
         it.print(430, 340, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, "Drücken schliesst, nach 60 s automatisch");
         return;
       }
@@ -537,135 +599,92 @@ display:
       it.filled_rectangle(LINKS_B, 59, 3, 480 - 59, SCHWARZ);
       it.print(LINKS_B + 21, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "VORMITTAG");
       it.print(LINKS_B + 21 + (800 - 18 - LINKS_B - 21) / 2 + 6, 70, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "NACHMITTAG");
-
-      // ---- Staubsauger-Zeile, immer zuoberst; darunter die Überschrift AUFGABEN ----
-      int oben_y = 70;
       const int ZB = LINKS_B - 36;  // Breite der Zeilen
-      if (!sauger_roh.empty()) {
-        int liste_y = oben_y;
-        auto s = sauger_lesen();
-        bool gew = cursor == 0;  // die Zeile ist immer der erste Eintrag
-        bool aktiv = s.zustand != "bereit";
-        std::string titel, unter;
-        if (s.zustand == "geplant") { titel = "Staubsauger startet um " + s.zeit; unter = zimmer_text(s.zimmer); }
-        else if (s.zustand == "saugt") { titel = "Staubsauger saugt"; unter = zimmer_text(s.zimmer); }
-        else if (s.zustand == "pausiert") { titel = "Staubsauger pausiert"; unter = zimmer_text(s.zimmer); }
-        else if (s.zustand == "zurueck") { titel = "Staubsauger fährt zur Station"; }
-        else if (s.zustand == "reinigen") { titel = "Staubsauger zum Leeren und Reinigen"; unter = "Fertig? Drücken, dann Zur Station"; }
-        else if (s.zustand == "steht") { titel = "Staubsauger steht"; unter = "nicht in der Station"; }
-        else if (s.zustand == "fehler") { titel = "Staubsauger: Störung"; unter = "Details in der Roborock-App"; }
-        else { titel = "Staubsaugen"; }
-        auto farbe = aktiv ? WEISS : SCHWARZ;
-        // Ruhig: eine Zeile wie eine Aufgabe; aktiv: schwarz, mit Untertitel
-        const int zh = aktiv ? 46 : 38;
-        if (aktiv) {
-          it.filled_rectangle(20, liste_y, ZB, zh, SCHWARZ);
-          if (gew) {
-            it.rectangle(22, liste_y + 2, ZB - 4, zh - 4, WEISS);
-            it.rectangle(23, liste_y + 3, ZB - 6, zh - 6, WEISS);
-          }
-          it.print(32, liste_y + 4, id(f_hinweis), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_hinweis), titel, ZB - 24).c_str());
-          it.print(32, liste_y + 26, id(f_klein), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_klein), unter, ZB - 24).c_str());
-        } else {
-          if (gew) rahmen(20, liste_y, ZB, zh);
-          else it.rectangle(20, liste_y, ZB, zh, SCHWARZ);
-          it.print(32, liste_y + zh / 2, id(f_zeile), farbe, TextAlign::CENTER_LEFT, titel.c_str());
-        }
-        liste_y += zh + 6;
+      const char *HILFE = "Drehen wählt · Drücken bestätigt · 10 s warten bricht ab";
 
-        // Menü direkt unter der Zeile
-        if (gew && saug_modus()) {
-          int my = liste_y, mh = 0;
-          const char *HILFE = "Drehen wählt · Drücken bestätigt · 10 s warten bricht ab";
-          if (modus == SAUG_MENU && saug_menu_senkrecht(s.zustand)) {
-            auto opt = saug_optionen(s.zustand);
-            int k = opt.size();
-            mh = 14 + k * 38 + 18;
-            rahmen(20, my, ZB, mh);
-            for (int o = 0; o < k; o++) {
-              int oy = my + 10 + o * 38;
-              if (o == auswahl) {
-                it.filled_rectangle(32, oy, ZB - 24, 32, SCHWARZ);
-                it.print(46, oy + 16, id(f_option), WEISS, TextAlign::CENTER_LEFT, opt[o].name);
-              } else {
-                it.rectangle(32, oy, ZB - 24, 32, SCHWARZ);
-                it.print(46, oy + 16, id(f_option), SCHWARZ, TextAlign::CENTER_LEFT, opt[o].name);
-              }
-            }
-            it.print(32, my + 12 + k * 38, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
-          } else if (modus == SAUG_MENU) {
-            auto opt = saug_optionen(s.zustand);
-            std::vector<std::string> namen;
-            for (auto &o : opt) namen.push_back(o.name);
-            mh = 72;
-            rahmen(20, my, ZB, mh);
-            knoepfe(32, my + 10, ZB - 24, namen, auswahl);
-            it.print(32, my + 50, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
-          } else {
-            mh = 96;
-            rahmen(20, my, ZB, mh);
-            std::string frage = zimmer_text(gewaehlt);
-            std::vector<std::string> namen;
-            int aktiv_knopf = auswahl;
-            if (modus == SAUG_ZEIT) {
-              frage += " saugen, Start:";
-              for (int o = 0; o < ANZAHL_OPTIONEN; o++) namen.push_back(START_NAMEN[o]);
-            } else {
-              frage += saug_min ? " in " + to_string(saug_min) + " Min saugen?" : " jetzt saugen?";
-              namen = {"Ja", "Zurück"};
-            }
-            it.print(32, my + 8, id(f_hinweis), SCHWARZ, TextAlign::TOP_LEFT, kuerzen(id(f_hinweis), frage, ZB - 24).c_str());
-            knoepfe(32, my + 34, ZB - 24, namen, aktiv_knopf);
-            it.print(32, my + 72, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
+      // ---- Homescreen: zwei Kacheln ----
+      if (ansicht == HOME) {
+        // Kachelzeile 'vor|hervor|nach': der mittlere Teil weiss auf schwarz
+        auto kachel_zeile = [&](int x, int y, const std::string &zeile, int breite) {
+          auto f = teilen(zeile, '|');
+          f.resize(3);
+          int x1, y1, w, h;
+          if (!f[0].empty()) {
+            std::string t = kuerzen(id(f_text), f[0], breite);
+            it.print(x, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, t.c_str());
+            it.get_text_bounds(x, y, t.c_str(), id(f_text), TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+            x += w;
           }
-          liste_y += mh + 6;
+          if (!f[1].empty()) {
+            it.get_text_bounds(x + 5, y, f[1].c_str(), id(f_hinweis), TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+            it.filled_rectangle(x, y - 3, w + 10, 26, SCHWARZ);
+            it.print(x + 5, y, id(f_hinweis), WEISS, TextAlign::TOP_LEFT, f[1].c_str());
+            x += w + 10;
+          }
+          if (!f[2].empty())
+            it.print(x, y, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, f[2].c_str());
+        };
+        static const char *TITEL[] = {"Haushalt", "Gefrierer"};
+        static const char *SYMBOL[] = {"\U000F00E2", "\U000F0717"};  // broom, snowflake
+        for (int k = 0; k < 2; k++) {
+          int ky = 72 + k * 202, kh = 188;
+          bool gew = cursor == k;
+          if (gew) rahmen(20, ky, ZB, kh);
+          else { it.rectangle(20, ky, ZB, kh, SCHWARZ); it.rectangle(21, ky + 1, ZB - 2, kh - 2, SCHWARZ); }
+          it.print(36, ky + 34, id(f_symbol_mittel), SCHWARZ, TextAlign::CENTER_LEFT, SYMBOL[k]);
+          it.print(76, ky + 34, id(f_qr_titel), SCHWARZ, TextAlign::CENTER_LEFT, TITEL[k]);
+          if (gew) it.filled_triangle(ZB - 4, ky + 23, ZB - 4, ky + 45, ZB + 12, ky + 34, SCHWARZ);
+          const std::string &roh = k == 0 ? kachel_haushalt : kachel_gefrierer;
+          if (roh.empty()) {
+            it.print(36, ky + 70, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, "Warte auf Home Assistant …");
+            continue;
+          }
+          auto zeilen = teilen(roh, '\n');
+          for (int z = 0; z < 3 && z < (int) zeilen.size(); z++)
+            kachel_zeile(36, ky + 72 + z * 34, zeilen[z], ZB - 32);
         }
-        oben_y = liste_y + 8;
       }
-      it.print(20, oben_y, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "AUFGABEN");
-      int liste_y = oben_y + 26;
-      int liste_h = 428 - liste_y;
 
-      if (!id(aufgaben).has_state()) {
-        it.print(28, liste_y + 10, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, "Warte auf Home Assistant …");
-      } else {
-        auto liste = eintraege(id(aufgaben).state);
-        abgleichen(liste);
-
-        // Elemente der Liste mit ihrer Höhe: Gruppenkopf, Zeile, Zusatz unter der gewählten Zeile
-        enum Art { KOPF, ZEILE, BESTAETIGUNG };
+      // ---- Liste (Aufgaben oder Gefrierer) ab Höhe liste_y ----
+      // Zeichnet Gruppenköpfe und Zeilen, scrollt so, dass die gewählte Zeile zu sehen ist.
+      auto liste_zeichnen = [&](const std::vector<Eintrag> &liste, int liste_y, const char *leer) {
+        int liste_h = 428 - liste_y;
+        enum Art { KOPF, ZEILE, BESTAETIGUNG, ENTNAHME };
         struct Element { Art art; int index; int h; std::string text; };
         std::vector<Element> el;
         std::string gruppe = "-";
-        bool nur_neu = std::count_if(liste.begin(), liste.end(), [](const Eintrag &e) { return !e.sauger; }) == 1;
+        bool nur_neu = std::count_if(liste.begin(), liste.end(), [](const Eintrag &e) { return !e.sauger && !e.zurueck; }) == 1;
         for (int i = 0; i < (int) liste.size(); i++) {
           const auto &e = liste[i];
-          if (e.sauger) continue;  // steht fest oben, siehe Staubsauger-Zeile
+          if (e.sauger || e.zurueck) continue;  // stehen fest oben
           if (e.neu) {
-            el.push_back({KOPF, -1, 22, nur_neu ? "ALLES ERLEDIGT" : ""});
+            el.push_back({KOPF, -1, 22, nur_neu ? leer : ""});
           } else if (e.gruppe != gruppe) {
             gruppe = e.gruppe;
             std::string g = gruppe;
             std::transform(g.begin(), g.end(), g.begin(), ::toupper);
-            if (g == "ÜBERFÄLLIG" || g == "Überfällig") g = "ÜBERFÄLLIG";
+            // toupper kennt keine Umlaute
+            if (gruppe == "Überfällig") g = "ÜBERFÄLLIG";
             else if (gruppe == "Nächste Tage") g = "NÄCHSTE TAGE";
+            else if (gruppe == "Später") g = "SPÄTER";
             el.push_back({KOPF, -1, 22, g});
           }
           el.push_back({ZEILE, i, 40, ""});
           if (i == cursor && modus == BESTAETIGEN) el.push_back({BESTAETIGUNG, i, 40, ""});
+          if (i == cursor && modus == GEF_MENU) el.push_back({ENTNAHME, i, 100, ""});
         }
 
         // Sichtbaren Ausschnitt so legen, dass die gewählte Zeile ganz zu sehen ist
         int n = el.size();
         std::vector<int> y(n + 1, 0);
         for (int k = 0; k < n; k++) y[k + 1] = y[k] + el[k].h;
-        if (cursor < 0 || liste[cursor].sauger) {
+        if (cursor < 0 || liste[cursor].sauger || liste[cursor].zurueck) {
           oben = 0;
         } else {
           int sel = 0;
           while (sel < n && !(el[sel].art == ZEILE && el[sel].index == cursor)) sel++;
           int ende = sel + 1;
-          while (ende < n && el[ende].art == BESTAETIGUNG) ende++;
+          while (ende < n && (el[ende].art == BESTAETIGUNG || el[ende].art == ENTNAHME)) ende++;
           int start = (sel > 0 && el[sel - 1].art == KOPF) ? sel - 1 : sel;
           oben = std::min(oben, n - 1);
           if (start < oben) oben = start;
@@ -692,13 +711,13 @@ display:
           if (m.art == ZEILE) {
             int zy = ey + 2, zh = 36;
             auto farbe = e.ueberfaellig ? WEISS : SCHWARZ;
-            if (e.ueberfaellig) it.filled_rectangle(20, zy, LINKS_B - 36, zh, SCHWARZ);
+            if (e.ueberfaellig) it.filled_rectangle(20, zy, ZB, zh, SCHWARZ);
             if (gewaehlt) {
               if (e.ueberfaellig) {
-                it.rectangle(24, zy + 4, LINKS_B - 44, zh - 8, WEISS);
-                it.rectangle(25, zy + 5, LINKS_B - 46, zh - 10, WEISS);
+                it.rectangle(24, zy + 4, ZB - 8, zh - 8, WEISS);
+                it.rectangle(25, zy + 5, ZB - 10, zh - 10, WEISS);
               } else {
-                for (int d = 0; d < 3; d++) it.rectangle(20 + d, zy + d, LINKS_B - 36 - 2 * d, zh - 2 * d, SCHWARZ);
+                rahmen(20, zy, ZB, zh);
               }
               it.filled_triangle(30, zy + 9, 30, zy + 27, 45, zy + 18, farbe);
             }
@@ -709,11 +728,23 @@ display:
               text_b = w + 14;
               it.print(LINKS_B - 26, zy + zh / 2, id(f_text), farbe, TextAlign::CENTER_RIGHT, e.text.c_str());
             }
-            std::string name = kuerzen(id(f_zeile), e.name, LINKS_B - 26 - 52 - text_b);
-            it.print(52, zy + zh / 2, id(f_zeile), farbe, TextAlign::CENTER_LEFT, name.c_str());
+            int nx = 52;
+            if (e.meal) {
+              it.print(nx, zy + zh / 2, id(f_symbol_klein), farbe, TextAlign::CENTER_LEFT, "\U000F065A");  // pot-steam
+              nx += 24;
+            }
+            std::string name = kuerzen(id(f_zeile), e.name, LINKS_B - 26 - nx - text_b);
+            it.print(nx, zy + zh / 2, id(f_zeile), farbe, TextAlign::CENTER_LEFT, name.c_str());
           } else if (m.art == BESTAETIGUNG) {
-            it.filled_rectangle(20, ey, LINKS_B - 36, 36, SCHWARZ);
+            it.filled_rectangle(20, ey, ZB, 36, SCHWARZ);
             it.print(32, ey + 18, id(f_hinweis), WEISS, TextAlign::CENTER_LEFT, "Erledigt? Nochmals drücken zum Bestätigen");
+          } else if (m.art == ENTNAHME) {
+            rahmen(20, ey, ZB, 94);
+            it.print(32, ey + 8, id(f_hinweis), SCHWARZ, TextAlign::TOP_LEFT, "Wie viel entnehmen?");
+            std::vector<std::string> namen;
+            for (auto &o : e.optionen) namen.push_back(o.second);
+            knoepfe(32, ey + 34, ZB - 24, namen, auswahl);
+            it.print(32, ey + 72, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
           }
         }
 
@@ -725,6 +756,136 @@ display:
           it.printf(LINKS_B - 26, hy, id(f_gruppe), SCHWARZ, TextAlign::TOP_RIGHT, "%d weitere oben", darueber);
         else if (darunter)
           it.printf(LINKS_B - 26, hy, id(f_gruppe), SCHWARZ, TextAlign::TOP_RIGHT, "%d weitere unten", darunter);
+      };
+
+      // Kopf einer Liste: mit Homescreen eine wählbare Zeile "Zurück", rechts der Titel
+      auto kopf = [&](int y, const std::string &titel) {
+        if (!home_aktiv()) {
+          it.print(20, y, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, titel.c_str());
+          return y + 26;
+        }
+        const int zh = 32;
+        if (cursor == 0) {
+          rahmen(20, y - 4, ZB, zh);
+          it.filled_triangle(30, y + 3, 30, y + 21, 45, y + 12, SCHWARZ);
+        }
+        it.print(52, y + 12, id(f_symbol_klein), SCHWARZ, TextAlign::CENTER_LEFT, "\U000F0141");  // chevron-left
+        it.print(72, y + 12, id(f_hinweis), SCHWARZ, TextAlign::CENTER_LEFT, "Zurück");
+        it.print(LINKS_B - 26, y + 12, id(f_titel), SCHWARZ, TextAlign::CENTER_RIGHT, titel.c_str());
+        return y + zh + 4;
+      };
+
+      // ---- Gefrierer ----
+      if (ansicht == GEFRIERER) {
+        auto liste = eintraege(id(aufgaben).state);
+        abgleichen(liste);
+        int artikel = liste.size() - 2;  // ohne Zurück und "+ Einfrieren"
+        std::string titel = "GEFRIERER";
+        if (artikel > 0) titel += " · " + to_string(artikel) + " ARTIKEL";
+        int liste_y = kopf(70, titel);
+        liste_zeichnen(liste, liste_y, "GEFRIERER IST LEER");
+      }
+
+      // ---- Aufgaben ----
+      if (ansicht == HAUSHALT) {
+        auto liste = eintraege(id(aufgaben).state);
+        abgleichen(liste);
+        int oben_y = 70;
+        if (home_aktiv()) oben_y = kopf(oben_y, "AUFGABEN") + 4;
+
+        // Staubsauger-Zeile, immer zuoberst (unter "Zurück")
+        if (!sauger_roh.empty()) {
+          int liste_y = oben_y;
+          auto s = sauger_lesen();
+          int sauger_index = home_aktiv() ? 1 : 0;
+          bool gew = cursor == sauger_index;
+          bool aktiv = s.zustand != "bereit";
+          std::string titel, unter;
+          if (s.zustand == "geplant") { titel = "Staubsauger startet um " + s.zeit; unter = zimmer_text(s.zimmer); }
+          else if (s.zustand == "saugt") { titel = "Staubsauger saugt"; unter = zimmer_text(s.zimmer); }
+          else if (s.zustand == "pausiert") { titel = "Staubsauger pausiert"; unter = zimmer_text(s.zimmer); }
+          else if (s.zustand == "zurueck") { titel = "Staubsauger fährt zur Station"; }
+          else if (s.zustand == "reinigen") { titel = "Staubsauger zum Leeren und Reinigen"; unter = "Fertig? Drücken, dann Zur Station"; }
+          else if (s.zustand == "steht") { titel = "Staubsauger steht"; unter = "nicht in der Station"; }
+          else if (s.zustand == "fehler") { titel = "Staubsauger: Störung"; unter = "Details in der Roborock-App"; }
+          else { titel = "Staubsaugen"; }
+          auto farbe = aktiv ? WEISS : SCHWARZ;
+          // Ruhig: eine Zeile wie eine Aufgabe; aktiv: schwarz, mit Untertitel
+          const int zh = aktiv ? 46 : 38;
+          if (aktiv) {
+            it.filled_rectangle(20, liste_y, ZB, zh, SCHWARZ);
+            if (gew) {
+              it.rectangle(22, liste_y + 2, ZB - 4, zh - 4, WEISS);
+              it.rectangle(23, liste_y + 3, ZB - 6, zh - 6, WEISS);
+            }
+            it.print(32, liste_y + 4, id(f_hinweis), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_hinweis), titel, ZB - 24).c_str());
+            it.print(32, liste_y + 26, id(f_klein), farbe, TextAlign::TOP_LEFT, kuerzen(id(f_klein), unter, ZB - 24).c_str());
+          } else {
+            if (gew) rahmen(20, liste_y, ZB, zh);
+            else it.rectangle(20, liste_y, ZB, zh, SCHWARZ);
+            it.print(32, liste_y + zh / 2, id(f_zeile), farbe, TextAlign::CENTER_LEFT, titel.c_str());
+          }
+          liste_y += zh + 6;
+
+          // Menü direkt unter der Zeile
+          if (gew && saug_modus()) {
+            int my = liste_y, mh = 0;
+            if (modus == SAUG_MENU && saug_menu_senkrecht(s.zustand)) {
+              auto opt = saug_optionen(s.zustand);
+              int k = opt.size();
+              mh = 14 + k * 38 + 18;
+              rahmen(20, my, ZB, mh);
+              for (int o = 0; o < k; o++) {
+                int oy = my + 10 + o * 38;
+                if (o == auswahl) {
+                  it.filled_rectangle(32, oy, ZB - 24, 32, SCHWARZ);
+                  it.print(46, oy + 16, id(f_option), WEISS, TextAlign::CENTER_LEFT, opt[o].name);
+                } else {
+                  it.rectangle(32, oy, ZB - 24, 32, SCHWARZ);
+                  it.print(46, oy + 16, id(f_option), SCHWARZ, TextAlign::CENTER_LEFT, opt[o].name);
+                }
+              }
+              it.print(32, my + 12 + k * 38, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
+            } else if (modus == SAUG_MENU) {
+              auto opt = saug_optionen(s.zustand);
+              std::vector<std::string> namen;
+              for (auto &o : opt) namen.push_back(o.name);
+              mh = 72;
+              rahmen(20, my, ZB, mh);
+              knoepfe(32, my + 10, ZB - 24, namen, auswahl);
+              it.print(32, my + 50, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
+            } else {
+              mh = 96;
+              rahmen(20, my, ZB, mh);
+              std::string frage = zimmer_text(gewaehlt);
+              std::vector<std::string> namen;
+              int aktiv_knopf = auswahl;
+              if (modus == SAUG_ZEIT) {
+                frage += " saugen, Start:";
+                for (int o = 0; o < ANZAHL_OPTIONEN; o++) namen.push_back(START_NAMEN[o]);
+              } else {
+                frage += saug_min ? " in " + to_string(saug_min) + " Min saugen?" : " jetzt saugen?";
+                namen = {"Ja", "Zurück"};
+              }
+              it.print(32, my + 8, id(f_hinweis), SCHWARZ, TextAlign::TOP_LEFT, kuerzen(id(f_hinweis), frage, ZB - 24).c_str());
+              knoepfe(32, my + 34, ZB - 24, namen, aktiv_knopf);
+              it.print(32, my + 72, id(f_klein), SCHWARZ, TextAlign::TOP_LEFT, HILFE);
+            }
+            liste_y += mh + 6;
+          }
+          oben_y = liste_y + (home_aktiv() ? 0 : 8);
+        }
+        int liste_y = oben_y;
+        if (!home_aktiv()) {
+          it.print(20, oben_y, id(f_titel), SCHWARZ, TextAlign::TOP_LEFT, "AUFGABEN");
+          liste_y = oben_y + 26;
+        }
+
+        if (!id(aufgaben).has_state()) {
+          it.print(28, liste_y + 10, id(f_text), SCHWARZ, TextAlign::TOP_LEFT, "Warte auf Home Assistant …");
+        } else {
+          liste_zeichnen(liste, liste_y, "ALLES ERLEDIGT");
+        }
       }
 
       // ---- Wetter: pro Tag Vormittag und Nachmittag ----

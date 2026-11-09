@@ -11,6 +11,7 @@ from homeassistant.util import dt as dt_util
 
 from . import HaushaltConfigEntry
 from .formular import FormularEntity
+from .gefrierer_formular import GefriererEntity
 
 
 async def async_setup_entry(
@@ -25,6 +26,13 @@ async def async_setup_entry(
             FormularDatum(manager, "zuletzt", "mdi:calendar-check", heute=True),
         ]
     )
+    if manager.gefrierer is not None:
+        async_add_entities(
+            [
+                GefriererDatum(manager, "eingefroren", "mdi:calendar-today"),
+                GefriererDatum(manager, "haltbar_datum", "mdi:calendar-end"),
+            ]
+        )
 
 
 class FormularDatum(FormularEntity, DateEntity):
@@ -45,3 +53,18 @@ class FormularDatum(FormularEntity, DateEntity):
     async def async_set_value(self, value: date) -> None:
         setattr(self.formular, self._feld, value)
         self.async_write_ha_state()
+
+
+class GefriererDatum(GefriererEntity, DateEntity):
+    def __init__(self, manager, feld: str, icon: str) -> None:
+        super().__init__(manager, "date", feld)
+        self._attr_icon = icon
+
+    @property
+    def native_value(self) -> date | None:
+        if self._feld == "eingefroren":
+            return self.formular.eingefroren_am
+        return getattr(self.formular, self._feld)
+
+    async def async_set_value(self, value: date) -> None:
+        self._setzen(value)

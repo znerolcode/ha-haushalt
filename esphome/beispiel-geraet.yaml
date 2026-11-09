@@ -31,6 +31,8 @@ substitutions:
   innen_temperatur: sensor.flur_temperatur  # deinen Temperatursensor eintragen
   # QR-Code "+ Neue Aufgabe" auf das Dashboard "Neue Aufgabe" (Adresse deines HA)
   neue_aufgabe_url: http://homeassistant.local:8123/neue-aufgabe/neu
+  # QR-Code "+ Einfrieren" auf den Tab Einfrieren im Dashboard "Gefrierer"
+  gefrierer_url: http://homeassistant.local:8123/haushalt-gefrierer/einfrieren
 
 packages:
   flur_display:

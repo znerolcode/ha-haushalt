@@ -1,4 +1,4 @@
-// Bedienlogik des Flur-Displays: Liste, Bestätigung, QR-Code und Staubsauger.
+// Bedienlogik des Flur-Displays: Homescreen, Aufgabenliste, Gefrierer, QR-Codes und Staubsauger.
 // Wird von flur-display.yaml eingebunden; gezeichnet wird dort im Display-Lambda.
 #pragma once
 
@@ -12,10 +12,18 @@
 
 namespace flur {
 
+// Was links angezeigt wird. Den Homescreen gibt es nur mit Gefrierer.
+enum Ansicht {
+  HOME,       // zwei Kacheln: Haushalt und Gefrierer
+  HAUSHALT,   // Aufgabenliste
+  GEFRIERER,  // Inhalt des Gefrierers
+};
+
 enum Modus {
   LISTE,
   BESTAETIGEN,  // "Erledigt? Nochmals drücken"
-  QR,           // QR-Code für neue Aufgaben
+  QR,           // QR-Code für neue Aufgaben bzw. zum Einfrieren
+  GEF_MENU,     // "Wie viel entnehmen?" unter einem Artikel
   SAUG_MENU,    // Menü unter der Staubsauger-Zeile
   ZIMMER,       // Zimmer im Grundriss wählen
   SAUG_ZEIT,    // Startzeit wählen
@@ -28,12 +36,18 @@ static const int ANZAHL_OPTIONEN = 4;
 static const char *const START_NAMEN[] = {"sofort", "5 Min", "20 Min", "60 Min"};
 
 static const char *const SAUGER_ID = "#sauger";
+static const char *const ZURUECK_ID = "#zurueck";
+static const char *const NEU_ID = "#neu";
 
 struct Eintrag {
   std::string id, gruppe, name, text;
-  bool ueberfaellig = false;
-  bool neu = false;     // der Eintrag "+ Neue Aufgabe"
-  bool sauger = false;  // die Staubsauger-Zeile ganz oben
+  bool ueberfaellig = false;  // bzw. beim Gefrierer: abgelaufen
+  bool neu = false;           // der Eintrag "+ Neue Aufgabe" bzw. "+ Einfrieren"
+  bool sauger = false;        // die Staubsauger-Zeile ganz oben
+  bool zurueck = false;       // "Zurück" zum Homescreen, ganz oben
+  bool meal = false;          // Gefrierer: Meal-Prep (Topf-Symbol)
+  // Gefrierer: Entnahme-Knöpfe als (Menge, Beschriftung)
+  std::vector<std::pair<std::string, std::string>> optionen;
 };
 
 // Eine Option in einem Menü: Beschriftung und was sie auslöst
@@ -42,6 +56,7 @@ struct Option {
   const char *aktion;
 };
 
+inline Ansicht ansicht = HOME;
 inline Modus modus = LISTE;
 inline int cursor = -1;          // -1: kein Pfeil sichtbar
 inline std::string cursor_id;    // damit der Pfeil bei neuen Daten auf derselben Aufgabe bleibt
@@ -54,6 +69,12 @@ inline std::vector<int> gewaehlt;  // gewählte Zimmer (Segment-IDs), leer = gan
 inline int zimmer_cursor = 0;      // 0..ANZAHL_ZIMMER-1 Zimmer, dann Weiter, Zurück
 inline bool zimmer_hinweis = false;  // "Erst ein Zimmer wählen"
 
+// Gefrierer aus sensor.gefrierer (Attribut anzeige) und die Kacheln für den Homescreen
+// (Attribut kachel von sensor.aufgaben und sensor.gefrierer), je 3 Zeilen 'vor|hervor|nach'
+inline std::string gef_roh;
+inline std::string kachel_haushalt;
+inline std::string kachel_gefrierer;
+
 // Gerade abgehakt, aber von Home Assistant noch nicht entfernt
 inline std::set<std::string> versteckt;
 
@@ -63,6 +84,9 @@ inline std::string senden_id;
 inline std::string saug_aktion;    // haushalt.saugen ("saugen") bzw. haushalt.sauger (sonst)
 inline std::string saug_zimmer;    // "19,20", leer = ganze Wohnung
 inline int saug_min = 0;
+inline bool gef_senden = false;    // haushalt.entnehmen
+inline std::string gef_artikel;
+inline std::string gef_menge;
 
 inline std::vector<std::string> teilen(const std::string &text, char trenner) {
   std::vector<std::string> teile;
@@ -76,6 +100,9 @@ inline std::vector<std::string> teilen(const std::string &text, char trenner) {
   }
   return teile;
 }
+
+// Homescreen nur, wenn die Integration einen Gefrierer liefert
+inline bool home_aktiv() { return !kachel_gefrierer.empty(); }
 
 // ---- Staubsauger ----
 
@@ -133,9 +160,18 @@ inline bool saug_menu_senkrecht(const std::string &zustand) { return zustand == 
 
 // ---- Liste ----
 
+inline Eintrag zurueck_eintrag() {
+  Eintrag z;
+  z.id = ZURUECK_ID;
+  z.zurueck = true;
+  return z;
+}
+
 // Zeilen aus sensor.aufgaben, Attribut anzeige: id|gruppe|name|text|ueberfaellig
-inline std::vector<Eintrag> eintraege(const std::string &roh) {
+inline std::vector<Eintrag> aufgaben_eintraege(const std::string &roh) {
   std::vector<Eintrag> liste;
+  if (home_aktiv())
+    liste.push_back(zurueck_eintrag());
   if (!sauger_roh.empty()) {
     Eintrag s;
     s.id = SAUGER_ID;
@@ -166,10 +202,62 @@ inline std::vector<Eintrag> eintraege(const std::string &roh) {
       it = versteckt.erase(it);
   }
   Eintrag neu;
+  neu.id = NEU_ID;
   neu.name = "+ Neue Aufgabe";
   neu.neu = true;
   liste.push_back(neu);
   return liste;
+}
+
+// Zeilen aus sensor.gefrierer, Attribut anzeige:
+// artikel|gruppe|name|menge|rest|abgelaufen|meal_prep|menge:beschriftung;menge:beschriftung
+inline std::vector<Eintrag> gefrierer_eintraege() {
+  std::vector<Eintrag> liste;
+  liste.push_back(zurueck_eintrag());
+  for (auto &zeile : teilen(gef_roh, '\n')) {
+    auto f = teilen(zeile, '|');
+    if (f.size() < 8 || f[0].empty())
+      continue;
+    Eintrag e;
+    e.id = f[0];
+    e.gruppe = f[1];
+    e.name = f[2];
+    e.text = f[3] + " · " + f[4];
+    e.ueberfaellig = f[5] == "1";
+    e.meal = f[6] == "1";
+    for (auto &o : teilen(f[7], ';')) {
+      size_t p = o.find(':');
+      if (p != std::string::npos)
+        e.optionen.push_back({o.substr(0, p), o.substr(p + 1)});
+    }
+    liste.push_back(e);
+  }
+  Eintrag neu;
+  neu.id = NEU_ID;
+  neu.name = "+ Einfrieren";
+  neu.neu = true;
+  liste.push_back(neu);
+  return liste;
+}
+
+inline std::vector<Eintrag> home_eintraege() {
+  Eintrag h, g;
+  h.id = "#haushalt";
+  h.name = "Haushalt";
+  g.id = "#gefrierer";
+  g.name = "Gefrierer";
+  return {h, g};
+}
+
+// Einträge der aktuellen Ansicht
+inline std::vector<Eintrag> eintraege(const std::string &roh) {
+  if (!home_aktiv())
+    ansicht = HAUSHALT;
+  if (ansicht == HOME)
+    return home_eintraege();
+  if (ansicht == GEFRIERER)
+    return gefrierer_eintraege();
+  return aufgaben_eintraege(roh);
 }
 
 inline bool saug_modus() { return modus == SAUG_MENU || modus == ZIMMER || modus == SAUG_ZEIT || modus == SAUG_FRAGE; }
@@ -185,12 +273,15 @@ inline void abgleichen(const std::vector<Eintrag> &liste) {
       // Zustand des Saugers hat gewechselt: Menü passt nicht mehr
       if (modus == SAUG_MENU)
         auswahl = std::min(auswahl, (int) saug_optionen(sauger_lesen().zustand).size() - 1);
+      // Menge hat sich geändert: weniger Knöpfe
+      if (modus == GEF_MENU)
+        auswahl = std::min(auswahl, std::max(0, (int) liste[i].optionen.size() - 1));
       return;
     }
   }
   cursor = std::min(cursor, n - 1);
   cursor_id = liste[cursor].id;
-  if (modus == BESTAETIGEN || saug_modus())
+  if (modus == BESTAETIGEN || modus == GEF_MENU || saug_modus())
     modus = LISTE;
 }
 
@@ -218,6 +309,11 @@ inline void drehen(int richtung, const std::string &roh) {
     case SAUG_FRAGE:
       auswahl = std::max(0, std::min(1, auswahl + richtung));
       return;
+    case GEF_MENU: {
+      int k = cursor >= 0 && cursor < n ? liste[cursor].optionen.size() : 1;
+      auswahl = std::max(0, std::min(k - 1, auswahl + richtung));
+      return;
+    }
     default:
       break;
   }
@@ -255,6 +351,42 @@ inline void druecken(const std::string &roh) {
     return;
   }
   const Eintrag &e = liste[cursor];
+  if (modus == GEF_MENU) {
+    if (auswahl < (int) e.optionen.size()) {
+      gef_senden = true;
+      gef_artikel = e.id;
+      gef_menge = e.optionen[auswahl].first;
+    }
+    modus = LISTE;
+    return;
+  }
+  // Homescreen: Kachel öffnen, Pfeil auf den ersten Eintrag nach "Zurück"
+  if (ansicht == HOME) {
+    ansicht = cursor == 0 ? HAUSHALT : GEFRIERER;
+    modus = LISTE;
+    oben = 0;
+    auto neu = eintraege(roh);
+    cursor = std::min(1, (int) neu.size() - 1);
+    cursor_id = neu[cursor].id;
+    return;
+  }
+  if (e.zurueck) {
+    cursor = ansicht == GEFRIERER ? 1 : 0;
+    ansicht = HOME;
+    modus = LISTE;
+    oben = 0;
+    cursor_id = home_eintraege()[cursor].id;
+    return;
+  }
+  if (ansicht == GEFRIERER) {
+    if (e.neu) {
+      modus = QR;
+    } else if (!e.optionen.empty()) {
+      modus = GEF_MENU;
+      auswahl = 0;
+    }
+    return;
+  }
   switch (modus) {
     case SAUG_MENU: {
       auto opt = saug_optionen(sauger_lesen().zustand);
@@ -333,7 +465,7 @@ inline void druecken(const std::string &roh) {
 }
 
 // Läuft gerade eine Auswahl, die nach einer Weile ohne Bedienung abbricht?
-inline bool auswahl_offen() { return modus == BESTAETIGEN || saug_modus(); }
+inline bool auswahl_offen() { return modus == BESTAETIGEN || modus == GEF_MENU || saug_modus(); }
 
 inline void auswahl_abbrechen() {
   if (auswahl_offen())
@@ -341,6 +473,7 @@ inline void auswahl_abbrechen() {
 }
 
 inline void ruhe() {
+  ansicht = home_aktiv() ? HOME : HAUSHALT;
   modus = LISTE;
   cursor = -1;
   cursor_id.clear();

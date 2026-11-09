@@ -1,0 +1,167 @@
+# Dashboard "Gefrierer": Inhalt ansehen, einfrieren und entnehmen, ohne Administratorrechte.
+# Voraussetzung: Haushalt > Konfigurieren > "Gefrierer verwalten" eingeschaltet.
+# Einrichten: Einstellungen > Dashboards > Dashboard hinzufügen > "Neues Dashboard von Grund auf",
+# Titel "Gefrierer", URL "haushalt-gefrierer" (HA verlangt einen Bindestrich), "Nur für Administratoren" aus.
+# Dann im Dashboard: Stift > drei Punkte > Raw-Konfigurationseditor, alles ersetzen durch diese Datei.
+# Der QR-Code "+ Einfrieren" am Flur-Display öffnet den Tab Einfrieren (siehe esphome/ANLEITUNG.md).
+title: Gefrierer
+views:
+  - title: Inhalt
+    path: inhalt
+    icon: mdi:snowflake
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            title: Meal-Prep
+            content: |-
+              {% set liste = state_attr('sensor.gefrierer', 'meal_prep') or [] %}
+              {% if liste %}
+              | | |
+              |:--|--:|
+              {% for a in liste %}| {{ a.name }} | {{ a.menge_text }} |
+              {% endfor %}
+              {% else %}Keine Meal-Prep-Portionen im Gefrierer.{% endif %}
+
+          - type: markdown
+            title: Alles nach Ablauf
+            content: |-
+              {% set liste = state_attr('sensor.gefrierer', 'artikel') or [] %}
+              {% if liste %}
+              | | |
+              |:--|--:|
+              {% for a in liste %}| {{ a.name }} · {{ a.menge_text }} | {% if a.tage < 0 %}<font color="#db4437">**{{ a.text }} abgelaufen**</font>{% else %}{{ a.text }}{% endif %} |
+              {% endfor %}
+              {% else %}Der Gefrierer ist leer.{% endif %}
+
+  - title: Einfrieren
+    path: einfrieren
+    icon: mdi:snowflake-variant
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: Einfrieren
+            show_header_toggle: false
+            entities:
+              - entity: text.gefrierer_name
+                name: Name
+              - entity: select.gefrierer_kategorie
+                name: Kategorie
+              - entity: number.gefrierer_menge
+                name: Menge
+              - entity: select.gefrierer_einheit
+                name: Einheit
+              - entity: date.gefrierer_eingefroren
+                name: Eingefroren am
+
+          - type: entities
+            entities:
+              - entity: select.gefrierer_haltbarkeit
+                name: Haltbarkeit
+
+          # Eigener Zeitraum (bei "Benutzerdefiniert" automatisch gewählt)
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: select.gefrierer_haltbarkeit
+                state: zeitraum
+            card:
+              type: entities
+              entities:
+                - entity: number.gefrierer_haltbar_anzahl
+                  name: Haltbar für
+                - entity: select.gefrierer_haltbar_einheit
+                  name: Zeitraum in
+
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: select.gefrierer_haltbarkeit
+                state: datum
+            card:
+              type: entities
+              entities:
+                - entity: date.gefrierer_haltbar_datum
+                  name: Haltbar bis
+
+          - type: markdown
+            content: >-
+              {% set bis = states('sensor.gefrierer_haltbar_bis') %}
+              {% if bis not in ['unknown', 'unavailable'] %}Haltbar bis **{{ as_timestamp(bis) | timestamp_custom('%d.%m.%Y') }}**
+              {% elif is_state('select.gefrierer_kategorie', 'benutzerdefiniert') %}Bei Benutzerdefiniert bitte Zeitraum oder Datum wählen.
+              {% else %}Bitte ein Datum wählen.{% endif %}
+
+          - type: button
+            name: Einfrieren
+            icon: mdi:plus-circle-outline
+            icon_height: 40px
+            show_state: false
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.gefrierer_einfrieren
+
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.gefrierer_meldung
+                state_not: unknown
+            card:
+              type: markdown
+              content: >-
+                {% set zeit = state_attr('sensor.gefrierer_meldung', 'zeit') %}
+                ✓ {{ states('sensor.gefrierer_meldung') }}
+                {% if zeit %}({{ as_timestamp(zeit) | timestamp_custom('%d.%m. %H:%M') }}){% endif %}
+
+  - title: Entnehmen
+    path: entnehmen
+    icon: mdi:minus-circle-outline
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: entities
+            title: Entnehmen
+            show_header_toggle: false
+            entities:
+              - entity: select.gefrierer_artikel
+                name: Artikel
+              - entity: number.gefrierer_entnahme
+                name: Menge
+
+          - type: markdown
+            content: >-
+              {% set wahl = states('select.gefrierer_artikel') %}
+              {% set a = (state_attr('sensor.gefrierer', 'artikel') or [])
+                 | selectattr('name', 'eq', wahl.split(' · ')[0]) | list %}
+              {% if a %}{% set e = {'portionen': 'Portionen', 'stueck': 'Stück', 'gramm': 'Gramm'} %}
+              Menge in {{ e[a[0].einheit] }}. Zuerst aus der ältesten Packung
+              (haltbar bis {{ as_timestamp(a[0].haltbar_bis) | timestamp_custom('%d.%m.%Y') }}).
+              {% else %}Der Gefrierer ist leer.{% endif %}
+
+          - type: button
+            name: Entnehmen
+            icon: mdi:minus-circle-outline
+            icon_height: 40px
+            show_state: false
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.gefrierer_entnehmen
+
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.gefrierer_meldung
+                state_not: unknown
+            card:
+              type: markdown
+              content: >-
+                {% set zeit = state_attr('sensor.gefrierer_meldung', 'zeit') %}
+                ✓ {{ states('sensor.gefrierer_meldung') }}
+                {% if zeit %}({{ as_timestamp(zeit) | timestamp_custom('%d.%m. %H:%M') }}){% endif %}

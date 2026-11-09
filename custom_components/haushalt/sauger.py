@@ -116,6 +116,20 @@ class Sauger:
         return None
 
     @property
+    def kachel(self) -> str:
+        """Eine Zeile für die Haushalt-Kachel auf dem Homescreen."""
+        zustand = self.zustand
+        if zustand == "geplant":
+            return f"Staubsaugen um {dt_util.as_local(self.startzeit).strftime('%H:%M')}"
+        return {
+            "saugt": "Staubsauger saugt",
+            "pausiert": "Staubsauger pausiert",
+            "zurueck": "Staubsauger fährt zurück",
+            "reinigen": "Staubsauger beim Reinigungspunkt",
+            "fehler": "Staubsauger: Fehler",
+        }.get(zustand, "Staubsauger bereit")
+
+    @property
     def anzeige(self) -> str:
         """Für das Display: zustand|uhrzeit|zimmer, z.B. 'geplant|17:05|19,20'."""
         zustand = self.zustand

@@ -21,13 +21,15 @@
           "wetter": "Wetter fürs Display",
           "staubsauger": "Staubsauger fürs Display",
           "reinigung_x": "Reinigungspunkt X",
-          "reinigung_y": "Reinigungspunkt Y"
+          "reinigung_y": "Reinigungspunkt Y",
+          "gefrierer": "Manage freezer"
         },
         "data_description": {
           "wetter": "Optional. Daraus berechnet die Integration Vormittag und Nachmittag für heute und die nächsten 2 Tage (Sensor Display-Wetter).",
           "staubsauger": "Optional. Zeigt zuoberst im Display die Zeile Staubsaugen: ganze Wohnung, einzelne Zimmer oder Sauger reinigen.",
           "reinigung_x": "Optional. Koordinate des Punkts, an den der Sauger zum Leeren und Reinigen fährt. Auslesen mit der Aktion roborock.get_vacuum_current_position, wenn er dort steht.",
-          "reinigung_y": "Optional. Zweite Koordinate des Reinigungspunkts."
+          "reinigung_y": "Optional. Zweite Koordinate des Reinigungspunkts.",
+          "gefrierer": "Optional. Adds the Freezer device (form to freeze and take out) and the Freezer sensor for the display."
         }
       }
     }
@@ -158,6 +160,15 @@
       },
       "neue_aufgabe_meldung": {
         "name": "Last created"
+      },
+      "gefrierer": {
+        "name": "Freezer"
+      },
+      "gefrierer_meldung": {
+        "name": "Last"
+      },
+      "gefrierer_haltbar_bis": {
+        "name": "Keeps until"
       }
     },
     "button": {
@@ -166,6 +177,12 @@
       },
       "neue_aufgabe_anlegen": {
         "name": "Create"
+      },
+      "gefrierer_einfrieren": {
+        "name": "Freeze"
+      },
+      "gefrierer_entnehmen": {
+        "name": "Take out"
       }
     },
     "text": {
@@ -174,6 +191,9 @@
       },
       "neue_aufgabe_weitere": {
         "name": "Additional single dates"
+      },
+      "gefrierer_name": {
+        "name": "Name"
       }
     },
     "select": {
@@ -205,6 +225,45 @@
           "wochen": "Weeks",
           "monate": "Months"
         }
+      },
+      "gefrierer_kategorie": {
+        "name": "Category",
+        "state": {
+          "meal_prep": "Meal prep (3 months)",
+          "fleisch": "Meat (6 months)",
+          "hackfleisch": "Minced meat (3 months)",
+          "fisch": "Fish (4 months)",
+          "gemuese_obst": "Vegetables/fruit (12 months)",
+          "brot": "Bread/baked goods (3 months)",
+          "benutzerdefiniert": "Custom"
+        }
+      },
+      "gefrierer_einheit": {
+        "name": "Unit",
+        "state": {
+          "portionen": "Portions",
+          "stueck": "Pieces",
+          "gramm": "Grams"
+        }
+      },
+      "gefrierer_haltbarkeit": {
+        "name": "Shelf life",
+        "state": {
+          "kategorie": "Like category",
+          "zeitraum": "Own period",
+          "datum": "Until date"
+        }
+      },
+      "gefrierer_haltbar_einheit": {
+        "name": "Period in",
+        "state": {
+          "tage": "Days",
+          "wochen": "Weeks",
+          "monate": "Months"
+        }
+      },
+      "gefrierer_artikel": {
+        "name": "Item"
       }
     },
     "number": {
@@ -213,6 +272,15 @@
       },
       "neue_aufgabe_anzahl": {
         "name": "Every"
+      },
+      "gefrierer_menge": {
+        "name": "Amount"
+      },
+      "gefrierer_haltbar_anzahl": {
+        "name": "Keeps for"
+      },
+      "gefrierer_entnahme": {
+        "name": "Amount to take out"
       }
     },
     "switch": {
@@ -244,6 +312,12 @@
       },
       "neue_aufgabe_zuletzt": {
         "name": "Last done on"
+      },
+      "gefrierer_eingefroren": {
+        "name": "Frozen on"
+      },
+      "gefrierer_haltbar_datum": {
+        "name": "Keeps until"
       }
     }
   },
@@ -281,6 +355,58 @@
           "description": "pausieren, fortsetzen, abbrechen oder reinigen."
         }
       }
+    },
+    "einfrieren": {
+      "name": "Freeze",
+      "description": "Puts a package into the freezer.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "E.g. chili con carne."
+        },
+        "kategorie": {
+          "name": "Category",
+          "description": "meal_prep, fleisch, hackfleisch, fisch, gemuese_obst, brot or benutzerdefiniert."
+        },
+        "menge": {
+          "name": "Amount",
+          "description": "Number of portions, pieces or grams."
+        },
+        "einheit": {
+          "name": "Unit",
+          "description": "portionen, stueck or gramm."
+        },
+        "eingefroren": {
+          "name": "Frozen on",
+          "description": "Defaults to today."
+        },
+        "haltbar_bis": {
+          "name": "Keeps until",
+          "description": "Own date. Otherwise the period or the category default applies."
+        },
+        "haltbar_anzahl": {
+          "name": "Keeps for",
+          "description": "Own period, e.g. 4 (with unit)."
+        },
+        "haltbar_einheit": {
+          "name": "Period in",
+          "description": "tage, wochen or monate."
+        }
+      }
+    },
+    "entnehmen": {
+      "name": "Take out",
+      "description": "Takes something out of the freezer, oldest package first.",
+      "fields": {
+        "artikel": {
+          "name": "Item",
+          "description": "Key from the artikel attribute of the Freezer sensor, e.g. chili~portionen."
+        },
+        "menge": {
+          "name": "Amount",
+          "description": "Empty or 0: everything."
+        }
+      }
     }
   },
   "exceptions": {
@@ -301,6 +427,27 @@
     },
     "kein_termin": {
       "message": "Please enter a first date, weekdays or single dates."
+    },
+    "kein_gefrierer": {
+      "message": "The freezer is not enabled in the Haushalt options."
+    },
+    "keine_menge": {
+      "message": "Please enter an amount of at least 1."
+    },
+    "unbekannte_kategorie": {
+      "message": "Unknown category."
+    },
+    "unbekannter_artikel": {
+      "message": "This item is not (or no longer) in the freezer."
+    },
+    "zeitraum_waehlen": {
+      "message": "For Custom, please choose your own period or a date."
+    },
+    "kein_zeitraum": {
+      "message": "Please enter a period of at least 1."
+    },
+    "kein_haltbar_datum": {
+      "message": "Please choose a keeps-until date."
     }
   }
 }

@@ -35,3 +35,81 @@ sauger:
             - fortsetzen
             - abbrechen
             - reinigen
+
+einfrieren:
+  fields:
+    name:
+      required: true
+      example: "Chili con Carne"
+      selector:
+        text:
+    kategorie:
+      required: false
+      default: meal_prep
+      selector:
+        select:
+          options:
+            - meal_prep
+            - fleisch
+            - hackfleisch
+            - fisch
+            - gemuese_obst
+            - brot
+            - benutzerdefiniert
+    menge:
+      required: true
+      example: 4
+      selector:
+        number:
+          min: 1
+          max: 10000
+          mode: box
+    einheit:
+      required: false
+      default: portionen
+      selector:
+        select:
+          options:
+            - portionen
+            - stueck
+            - gramm
+    eingefroren:
+      required: false
+      selector:
+        date:
+    haltbar_bis:
+      required: false
+      selector:
+        date:
+    haltbar_anzahl:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 120
+          mode: box
+    haltbar_einheit:
+      required: false
+      default: monate
+      selector:
+        select:
+          options:
+            - tage
+            - wochen
+            - monate
+
+entnehmen:
+  fields:
+    artikel:
+      required: true
+      example: "chili con carne~portionen"
+      selector:
+        text:
+    menge:
+      required: false
+      example: 1
+      selector:
+        number:
+          min: 0
+          max: 10000
+          mode: box

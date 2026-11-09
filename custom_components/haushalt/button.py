@@ -9,6 +9,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import HaushaltConfigEntry
 from .entity import AufgabeEntity
 from .formular import FormularEntity, async_aufgabe_anlegen
+from .gefrierer_formular import GefriererEntity, gewaehlter_artikel
 
 
 async def async_setup_entry(
@@ -18,6 +19,13 @@ async def async_setup_entry(
 ) -> None:
     manager = entry.runtime_data
     async_add_entities([AnlegenButton(manager)])
+    if manager.gefrierer is not None:
+        async_add_entities(
+            [
+                EinfrierenButton(manager, "button", "einfrieren"),
+                EntnehmenButton(manager, "button", "entnehmen"),
+            ]
+        )
     for aufgabe_id in manager.aufgaben:
         async_add_entities(
             [ErledigtButton(manager, aufgabe_id)], config_subentry_id=aufgabe_id
@@ -48,3 +56,28 @@ class AnlegenButton(FormularEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await async_aufgabe_anlegen(self.manager)
+
+
+class EinfrierenButton(GefriererEntity, ButtonEntity):
+    _attr_icon = "mdi:snowflake-variant"
+
+    async def async_press(self) -> None:
+        f = self.formular
+        await self.manager.async_einfrieren(
+            f.name, f.kategorie, f.menge, f.einheit, f.eingefroren_am,
+            f.haltbar_datum, f.haltbar_anzahl, f.haltbar_einheit, f.haltbarkeit,
+        )
+        f.einfrieren_leeren()
+        self.manager.aktualisieren()
+
+
+class EntnehmenButton(GefriererEntity, ButtonEntity):
+    _attr_icon = "mdi:minus-circle-outline"
+
+    async def async_press(self) -> None:
+        key = gewaehlter_artikel(self.manager)
+        if key is None:
+            return
+        await self.manager.async_entnehmen(key, self.formular.entnahme)
+        self.formular.entnahme = 1
+        self.manager.aktualisieren()
