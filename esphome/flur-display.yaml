@@ -75,7 +75,7 @@ text_sensor:
       - script.execute: daten_neu
   # Kacheln auf dem Homescreen, je 3 Zeilen 'vor|hervor|nach'
   - platform: homeassistant
-    id: kachel_haushalt
+    id: ha_kachel_haushalt
     entity_id: sensor.aufgaben
     attribute: kachel
     internal: true
@@ -93,7 +93,7 @@ text_sensor:
       - script.execute: daten_neu
   # Letzter Einsatz des Staubsaugers: tag|start|ende|zimmer
   - platform: homeassistant
-    id: sauger_letzter
+    id: ha_sauger_letzter
     entity_id: sensor.aufgaben
     attribute: sauger_letzter
     internal: true
@@ -110,7 +110,7 @@ text_sensor:
       - lambda: 'flur::gef_roh = x;'
       - script.execute: daten_neu
   - platform: homeassistant
-    id: kachel_gefrierer
+    id: ha_kachel_gefrierer
     entity_id: sensor.gefrierer
     attribute: kachel
     internal: true
